@@ -1,0 +1,13 @@
+As correctly mentioned in the review, the engineering environment on CITA is unlike other teams at HSBC. While it provides a great environment for freedom to innovate and deliver with flexibility, the lack of an end-to-end engineering structure introduces challenges, especially with respect to (1) visibility into an individual contributor’s bandwidth and (2) visibility of blockers in deployment and development that they may face. These can often be misconstrued as 'lack of decision-making' or 'delay in service delivery'. For instance, delays in fixing a bug were introduced due to incomplete documentation of tasks at hand during a sprint, and lack of service dependency management that could ripple failures across dependent services. This scenario makes it easy for facts to be misrepresented in the individual contributor’s favor.
+
+
+
+While taking complete responsibility for instances where the delivery was affected in terms of time or quality, I’ve reached a better understanding of my oversight. This reflection better aligns with my aim to demonstrate HSBC values by communicating about blockers, documenting them, and taking complete ownership in addressing them before they could impact the team’s delivery or efficiency. I am also looking at ways to avoid these issues in the future with changes in processes.
+
+
+
+Looking at the bigger picture, I've come to understand that the CITA team is an excellent blend of People, Process, and Technology, fostering a culture that encourages collaboration. However, it's important to safeguard and retain this with best practices wherever necessary.
+
+
+
+Moving forward with valuable learnings and experience, I wish the team the best and look forward to future collaborations!
