@@ -1,0 +1,136 @@
+✅ Layered Breakdown of the Question
+Mathematics/Algorithms
+
+Is it fair to compare SVD and GESDD just by time complexity?
+
+Is GESDD inherently more scalable than classical SVD?
+
+Numerical Linear Algebra / LAPACK Routines
+
+How do SVD and GESDD differ at the LAPACK level?
+
+Does GESDD allow decomposition of the task into parallel subtasks?
+
+Code / Library Implementation (e.g., ITensor)
+
+How are SVD routines (like GESDD) used in MPS tensor contractions?
+
+Do differences in the backend (GESVD vs GESDD) matter practically?
+
+HPC Context
+
+Does GESDD provide benefits in HPC settings (multi-core, GPU)?
+
+What about distributed computing?
+
+*Summary: Is it fair to compare them only via time/space complexity?
+
+1. Mathematics / Algorithms Layer
+✅ Is it fair to compare SVD and GESDD just by time complexity?
+Not entirely. Time complexity gives only a theoretical upper bound (e.g., 
+𝑂
+(
+𝑛
+3
+)
+O(n 
+3
+ ) for full SVD), but:
+
+Real-world performance also depends on memory access patterns, parallelizability, and numerical stability.
+
+Some algorithms may have the same complexity but differ drastically in wall-clock time due to implementation.
+
+✅ Is GESDD inherently more scalable than classical SVD?
+Yes — algorithmically, GESDD (Divide-and-Conquer SVD) is designed to exploit parallelism:
+
+It recursively divides the matrix into smaller blocks.
+
+Those blocks are solved independently then recombined.
+This decomposition makes it better suited for modern multi-core/multi-threaded systems than the traditional QR-based GESVD.
+
+2. Numerical Linear Algebra / LAPACK Layer
+GESVD vs GESDD (LAPACK routines)
+GESVD: Classic Golub–Reinsch algorithm; QR-based, robust, but less parallelizable.
+
+GESDD: Divide-and-Conquer SVD; designed for speed and partial SVD, and supports faster computation especially for large matrices.
+
+✅ Does GESDD allow decomposition into parallel subtasks?
+Yes. The Divide-and-Conquer nature means subproblems can be computed concurrently:
+
+Internally leverages eigenvalue decompositions of smaller bidiagonal matrices.
+
+More suitable for multithreaded LAPACK/BLAS (e.g., OpenBLAS, Intel MKL).
+
+3. Code / Library Layer (e.g., ITensor, MPS contractions)
+In ITensor:
+
+SVD is used for truncating tensors in MPS/DMRG.
+
+ITensor allows selecting the backend (GESVD or GESDD) depending on the user's build (e.g., using MKL, LAPACK).
+
+✅ Do differences in backend routines matter practically in ITensor?
+Yes — especially for large bond dimensions:
+
+GESDD can significantly reduce runtime for large tensors during contractions or truncations.
+
+However, for small SVDs (e.g., small bond dimensions), the benefit may be negligible.
+
+But note:
+Some versions of LAPACK fallback from GESDD to GESVD when numerical issues arise.
+
+This fallback may add non-deterministic behavior unless explicitly controlled.
+
+4. HPC and Distributed Computing Layer
+✅ Does GESDD provide advantages in HPC settings?
+Yes, specifically for shared-memory parallelism:
+
+Modern LAPACK/BLAS implementations exploit OpenMP or threading in GESDD far more efficiently.
+
+🚫 What about distributed computing (MPI)?
+Standard GESDD is not distributed.
+
+For distributed settings, ScaLAPACK or Elemental libraries provide distributed SVD, and their implementations may also use divide-and-conquer internally.
+
+So:
+
+GESDD helps in shared-memory HPC, but not automatically scalable to distributed memory.
+
+For distributed MPS or PEPS simulations, more specialized approaches (e.g., block SVDs or tensor network libraries with MPI support) are needed.
+
+5. Final Thoughts: Is it fair to compare them only on time/space complexity?
+❌ Not entirely fair — here's why:
+Algorithmically, they differ in parallelism, stability, and structure.
+
+Practically, performance depends on the LAPACK backend, threading model, and tensor size.
+
+HPC-wise, only GESDD offers true threading benefits.
+
+In distributed compute, neither scales natively — external distributed SVDs are needed.
+
+✅ Summary Table
+Layer	GESVD	GESDD
+Algorithm	Robust, QR-based	Divide-and-conquer, recursive
+Time Complexity	
+𝑂
+(
+𝑛
+3
+)
+O(n 
+3
+ )	
+𝑂
+(
+𝑛
+3
+)
+O(n 
+3
+ ) (better constants)
+Parallelism	Poor	Good (multi-core, threads)
+ITensor Use	Default/stable	Faster for large tensors
+HPC (shared memory)	Inefficient	Efficient
+HPC (distributed)	Needs external lib	Needs external lib
+
+Would you like me to show a benchmark comparison using GESVD vs GESDD in a specific ITensor contraction use case?
