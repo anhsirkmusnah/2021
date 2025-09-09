@@ -1,0 +1,329 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Subsample large CSV into 2-week bins with per-bin sampling\n",
+    "\n",
+    "- Works with 1 vCPU / limited RAM (Dataproc JupyterLab)\n",
+    "- Input: large CSV on GCS (`gs://.../file.csv`)\n",
+    "- Output: Parquet files per bin uploaded to `gs://.../out/`\n",
+    "- Sampling: per-bin proportional allocation, ~6% fraud / 94% non-fraud\n",
+    "- Streaming two-pass algorithm (reservoir sampling, bounded memory)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# =============================\n",
+    "# Configurable variables\n",
+    "# =============================\n",
+    "CSV_GS_URI = \"gs://your-bucket/path/to/large_file.csv\"   # input CSV\n",
+    "OUTPUT_GS_PREFIX = \"gs://your-bucket/path/to/output_bins/\"  # output folder\n",
+    "TEMP_LOCAL_DIR = \"/tmp/bin_sampling_tmp\"  # local tmp dir\n",
+    "\n",
+    "CHUNKSIZE = 80_000      # rows per chunk (lower if memory tight)\n",
+    "TARGET_TOTAL = 100_000  # total sampled rows across all bins\n",
+    "FRAUD_PCT = 0.06        # fraction fraud rows per bin\n",
+    "NONFRAUD_PCT = 0.94     # fraction non-fraud rows per bin\n",
+    "WINDOW_DAYS = 14        # bin size in days (2 weeks)\n",
+    "RANDOM_SEED = 42\n",
+    "\n",
+    "# Columns\n",
+    "TIME_COL = \"event_received_at\"   # timestamp column\n",
+    "LABEL_COL = \"fraud_label\"        # fraud label column\n",
+    "\n",
+    "# Fraud/non-fraud values to detect (configurable)\n",
+    "FRAUD_VALUES = {1, \"1\", True, \"True\", \"true\", \"TRUE\"}\n",
+    "NONFRAUD_VALUES = {0, \"0\", False, \"False\", \"false\", \"FALSE\"}\n",
+    "\n",
+    "# Timestamp standardization\n",
+    "TIMEZONE = \"UTC\"   # force to UTC; or None to keep naive\n",
+    "\n",
+    "# Extra CSV parser kwargs\n",
+    "CSV_PARSER_KWARGS = {\n",
+    "    \"parse_dates\": [TIME_COL],\n",
+    "    \"low_memory\": True,\n",
+    "}\n",
+    "\n",
+    "GSUTIL_CMD = \"gsutil\"  # path to gsutil\n",
+    "\n",
+    "import os, math, random, subprocess\n",
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "from collections import defaultdict, Counter\n",
+    "from datetime import timedelta\n",
+    "\n",
+    "random.seed(RANDOM_SEED)\n",
+    "np.random.seed(RANDOM_SEED)\n",
+    "\n",
+    "os.makedirs(TEMP_LOCAL_DIR, exist_ok=True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Reservoir sampler implementation\n",
+    "class ReservoirSampler:\n",
+    "    def __init__(self, capacity):\n",
+    "        self.capacity = int(capacity)\n",
+    "        self.n_seen = 0\n",
+    "        self.items = []\n",
+    "\n",
+    "    def add(self, item):\n",
+    "        self.n_seen += 1\n",
+    "        if len(self.items) < self.capacity:\n",
+    "            self.items.append(item)\n",
+    "        else:\n",
+    "            j = random.randrange(self.n_seen)\n",
+    "            if j < self.capacity:\n",
+    "                self.items[j] = item\n",
+    "\n",
+    "    def current_size(self):\n",
+    "        return len(self.items)\n",
+    "\n",
+    "    def final_items(self):\n",
+    "        return self.items"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Function to compute bin start (2-week window)\n",
+    "def compute_bin_start_series(ts_series, window_days=WINDOW_DAYS, anchor=pd.Timestamp(\"1970-01-01\")):\n",
+    "    dt = pd.to_datetime(ts_series, errors='coerce')\n",
+    "    if TIMEZONE:\n",
+    "        dt = dt.dt.tz_localize(TIMEZONE, nonexistent='NaT', ambiguous='NaT') if dt.dt.tz is None else dt.dt.tz_convert(TIMEZONE)\n",
+    "        dt = dt.dt.tz_localize(None)\n",
+    "    delta_days = (dt - anchor).dt.days\n",
+    "    bin_index = (delta_days // window_days).astype(int)\n",
+    "    bin_start = anchor + pd.to_timedelta(bin_index * window_days, unit=\"D\")\n",
+    "    return bin_start"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Pass 1: Count rows per bin (fraud / non-fraud)\n",
+    "- Streaming read of CSV\n",
+    "- Compute counts per 2-week bin\n",
+    "- Used later to assign proportional sample sizes"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "bin_counts = Counter()\n",
+    "bin_label_counts = defaultdict(lambda: Counter())\n",
+    "total_rows = 0\n",
+    "\n",
+    "reader = pd.read_csv(CSV_GS_URI, chunksize=CHUNKSIZE, **CSV_PARSER_KWARGS)\n",
+    "anchor = pd.Timestamp(\"1970-01-01\")\n",
+    "\n",
+    "for i, chunk in enumerate(reader):\n",
+    "    chunk[TIME_COL] = pd.to_datetime(chunk[TIME_COL], errors='coerce')\n",
+    "    if TIMEZONE:\n",
+    "        chunk[TIME_COL] = chunk[TIME_COL].dt.tz_localize(TIMEZONE, nonexistent='NaT', ambiguous='NaT', errors='coerce') if chunk[TIME_COL].dt.tz is None else chunk[TIME_COL].dt.tz_convert(TIMEZONE)\n",
+    "        chunk[TIME_COL] = chunk[TIME_COL].dt.tz_localize(None)\n",
+    "    valid = chunk[chunk[TIME_COL].notna()]\n",
+    "    if valid.empty:\n",
+    "        continue\n",
+    "    bin_starts = compute_bin_start_series(valid[TIME_COL], window_days=WINDOW_DAYS, anchor=anchor)\n",
+    "    valid['_bin_start'] = bin_starts\n",
+    "    grp = valid.groupby(['_bin_start', LABEL_COL]).size().reset_index(name='cnt')\n",
+    "    for _, row in grp.iterrows():\n",
+    "        bs = pd.Timestamp(row['_bin_start'])\n",
+    "        lab = row[LABEL_COL]\n",
+    "        cnt = int(row['cnt'])\n",
+    "        bin_counts[bs] += cnt\n",
+    "        bin_label_counts[bs][lab] += cnt\n",
+    "        total_rows += cnt\n",
+    "\n",
+    "num_bins = len(bin_counts)\n",
+    "print(f\"Pass 1 done. {total_rows} rows, {num_bins} bins found.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Assign proportional per-bin targets\n",
+    "- Each bin gets rows proportionally to its size relative to total\n",
+    "- Within each bin, split between fraud/non-fraud (6% vs 94%)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "per_bin_targets = {}\n",
+    "for bs, cnt in bin_counts.items():\n",
+    "    prop = cnt / total_rows\n",
+    "    per_bin = max(1, int(round(TARGET_TOTAL * prop)))\n",
+    "    fraud_cap = int(math.ceil(per_bin * FRAUD_PCT))\n",
+    "    nonfraud_cap = per_bin - fraud_cap\n",
+    "    per_bin_targets[bs] = {\n",
+    "        \"per_bin_total\": per_bin,\n",
+    "        \"fraud_capacity\": fraud_cap,\n",
+    "        \"nonfraud_capacity\": nonfraud_cap,\n",
+    "        \"available\": bin_label_counts[bs]\n",
+    "    }\n",
+    "\n",
+    "print(\"Example targets:\")\n",
+    "for k in sorted(per_bin_targets.keys())[:5]:\n",
+    "    print(k.date(), per_bin_targets[k])"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Pass 2: Reservoir sampling\n",
+    "- Initialize fraud + non-fraud reservoirs per bin\n",
+    "- Stream again through CSV\n",
+    "- Add rows into respective reservoirs\n",
+    "- At end, each bin has up to `per_bin_total` sampled rows"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "samplers = {}\n",
+    "for bs, caps in per_bin_targets.items():\n",
+    "    samplers[bs] = {\n",
+    "        \"fraud\": ReservoirSampler(caps['fraud_capacity']),\n",
+    "        \"nonfraud\": ReservoirSampler(caps['nonfraud_capacity'])\n",
+    "    }\n",
+    "\n",
+    "reader = pd.read_csv(CSV_GS_URI, chunksize=CHUNKSIZE, **CSV_PARSER_KWARGS)\n",
+    "\n",
+    "for chunk in reader:\n",
+    "    chunk[TIME_COL] = pd.to_datetime(chunk[TIME_COL], errors='coerce')\n",
+    "    if TIMEZONE:\n",
+    "        chunk[TIME_COL] = chunk[TIME_COL].dt.tz_localize(TIMEZONE, nonexistent='NaT', ambiguous='NaT', errors='coerce') if chunk[TIME_COL].dt.tz is None else chunk[TIME_COL].dt.tz_convert(TIMEZONE)\n",
+    "        chunk[TIME_COL] = chunk[TIME_COL].dt.tz_localize(None)\n",
+    "    valid = chunk[chunk[TIME_COL].notna()]\n",
+    "    if valid.empty:\n",
+    "        continue\n",
+    "    valid['_bin_start'] = compute_bin_start_series(valid[TIME_COL], window_days=WINDOW_DAYS, anchor=anchor)\n",
+    "    for _, row in valid.iterrows():\n",
+    "        bs = pd.Timestamp(row['_bin_start'])\n",
+    "        if bs not in samplers:\n",
+    "            continue\n",
+    "        lab = row[LABEL_COL]\n",
+    "        if lab in FRAUD_VALUES:\n",
+    "            samplers[bs]['fraud'].add(row.to_dict())\n",
+    "        elif lab in NONFRAUD_VALUES:\n",
+    "            samplers[bs]['nonfraud'].add(row.to_dict())\n",
+    "        else:\n",
+    "            samplers[bs]['nonfraud'].add(row.to_dict())  # default fallback\n",
+    "\n",
+    "print(\"Pass 2 done.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Write parquet files per bin and upload to GCS"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import pyarrow as pa, pyarrow.parquet as pq\n",
+    "\n",
+    "written_files = []\n",
+    "for bs, sdict in samplers.items():\n",
+    "    fraud_items = sdict['fraud'].final_items()\n",
+    "    nonfraud_items = sdict['nonfraud'].final_items()\n",
+    "    combined = fraud_items + nonfraud_items\n",
+    "    if not combined:\n",
+    "        continue\n",
+    "    df_bin = pd.DataFrame(combined)\n",
+    "    df_bin[TIME_COL] = pd.to_datetime(df_bin[TIME_COL], errors='coerce')\n",
+    "    df_bin = df_bin.sort_values(TIME_COL).reset_index(drop=True)\n",
+    "    bs_iso = bs.strftime(\"%Y-%m-%d\")\n",
+    "    local_fn = os.path.join(TEMP_LOCAL_DIR, f\"bin_{bs_iso}.parquet\")\n",
+    "    df_bin.to_parquet(local_fn, index=False)\n",
+    "    remote_fn = os.path.join(OUTPUT_GS_PREFIX, f\"bin_{bs_iso}.parquet\")\n",
+    "    subprocess.check_call([GSUTIL_CMD, \"cp\", local_fn, remote_fn])\n",
+    "    written_files.append(remote_fn)\n",
+    "\n",
+    "print(\"Uploaded bins:\")\n",
+    "for f in written_files:\n",
+    "    print(\"-\", f)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Summary of achieved sample sizes"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "summary = []\n",
+    "tot = 0\n",
+    "fraud_tot = 0\n",
+    "for bs, sdict in samplers.items():\n",
+    "    fcount = sdict['fraud'].current_size()\n",
+    "    ncount = sdict['nonfraud'].current_size()\n",
+    "    t = fcount + ncount\n",
+    "    tot += t\n",
+    "    fraud_tot += fcount\n",
+    "    summary.append({\n",
+    "        \"bin\": bs,\n",
+    "        \"fraud\": fcount,\n",
+    "        \"nonfraud\": ncount,\n",
+    "        \"total\": t,\n",
+    "        \"pct_fraud\": (fcount / t * 100) if t>0 else 0\n",
+    "    })\n",
+    "\n",
+    "df_summary = pd.DataFrame(summary).sort_values(\"bin\")\n",
+    "print(f\"Total sampled: {tot}, overall fraud %: {fraud_tot/tot*100:.2f}%\")\n",
+    "df_summary.head(10)"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "name": "python",
+   "version": "3.9"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2
+}
