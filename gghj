@@ -1,0 +1,58 @@
+import pyarrow.dataset as ds
+import pyarrow.parquet as pq
+
+# =============================
+# Configurable variables
+# =============================
+PARQUET_GS_URI = "gs://your-bucket/path/to/dataset/"   # input Parquet dataset
+OUTPUT_GS_PREFIX = "gs://your-bucket/path/to/output_bins/"
+TEMP_LOCAL_DIR = "/tmp/bin_sampling_tmp"
+
+TARGET_TOTAL = 100_000
+FRAUD_PCT = 0.06
+NONFRAUD_PCT = 0.94
+WINDOW_DAYS = 14
+RANDOM_SEED = 42
+
+TIME_COL = "event_received_at"
+LABEL_COL = "fraud_label"
+
+FRAUD_VALUES = {1, "1", True, "True", "true", "TRUE"}
+NONFRAUD_VALUES = {0, "0", False, "False", "false", "FALSE"}
+
+TIME_IS_UNIX = True
+TIMEZONE = "UTC"
+
+# Use threads for faster IO
+PARQUET_READER_OPTS = dict(use_threads=True)
+
+import os, math, random
+import pandas as pd
+import numpy as np
+from collections import defaultdict, Counter
+
+random.seed(RANDOM_SEED)
+np.random.seed(RANDOM_SEED)
+
+os.makedirs(TEMP_LOCAL_DIR, exist_ok=True)
+
+# =============================
+# Parquet reader yielding chunks
+# =============================
+def parquet_reader(uri, batch_size=None):
+    dataset = ds.dataset(uri, format="parquet")
+    scanner = dataset.scan(columns=None, use_threads=True)
+    batches = scanner.to_batches(batch_size=batch_size)
+    for b in batches:
+        yield b.to_pandas()
+
+
+
+
+----
+
+
+reader = parquet_reader(PARQUET_GS_URI, batch_size=80_000)
+for i, chunk in enumerate(reader):
+    ...
+
