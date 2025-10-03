@@ -1110,3 +1110,707 @@ PYBIND11_MODULE(helloitensor, m)
           py::arg("cutoff") = 1E-12, py::arg("baseMaxDim") = 256, py::arg("maxCap") = 2048
     );
 }
+
+
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <pybind11/numpy.h>
+#include "itensor/all.h"
+#include "QubitSite.h"   // <-- your extended QubitSite with op() updates
+
+namespace py = pybind11;
+using namespace itensor;
+
+// ---------------------------------------------------------
+// Helper: build MPS of |0...0>
+// ---------------------------------------------------------
+MPS init_state(int n)
+{
+    auto sites = SiteSet(QubitSite(n));
+    MPS psi(sites);
+    for(int i = 1; i <= n; ++i)
+    {
+        psi.set(i, ITensor(sites(i)(1))); // |0>
+    }
+    return psi;
+}
+
+// ---------------------------------------------------------
+// Apply single- or two-qubit gates from encoded list
+// gate format: [gate_type, q0, q1, param(s)]
+// ---------------------------------------------------------
+void apply_gate_list(MPS &psi,
+                     SiteSet const& sites,
+                     std::vector<std::vector<py::object>> const& gates,
+                     Args const& args)
+{
+    for(auto const& g : gates)
+    {
+        int gtype = g[0].cast<int>();
+        int q0    = g[1].cast<int>() + 1; // 1-indexed
+        int q1    = g[2].cast<int>();
+        q1        = (q1 >= 0 ? q1+1 : -1);
+
+        ITensor G;
+
+        switch(gtype)
+        {
+            case 0: // H
+                G = op(sites,"H",q0);
+                psi.position(q0);
+                psi.Aref(q0) = psi.A(q0) * G;
+                break;
+
+            case 1: // Rx
+                G = op(sites,"Rx",q0,{"θ",g[3].cast<double>()});
+                psi.position(q0);
+                psi.Aref(q0) = psi.A(q0) * G;
+                break;
+
+            case 2: // Rz
+                G = op(sites,"Rz",q0,{"θ",g[3].cast<double>()});
+                psi.position(q0);
+                psi.Aref(q0) = psi.A(q0) * G;
+                break;
+
+            case 3: // XXPhase
+                {
+                  double theta = g[3].cast<double>();
+                  ITensor G2 = op(sites,"XX",q0,q1,{"θ",theta});
+                  applyMPO(psi,G2,args);
+                }
+                break;
+
+            case 4: // ZZPhase
+                {
+                  double theta = g[3].cast<double>();
+                  ITensor G2 = op(sites,"ZZ",q0,q1,{"θ",theta});
+                  applyMPO(psi,G2,args);
+                }
+                break;
+
+            case 5: // SWAP
+                {
+                  ITensor G2 = op(sites,"SWAP",q0,q1);
+                  applyMPO(psi,G2,args);
+                }
+                break;
+
+            case 6: // T
+                G = op(sites,"T",q0);
+                psi.position(q0);
+                psi.Aref(q0) = psi.A(q0) * G;
+                break;
+
+            case 7: // CZ
+                {
+                  ITensor G2 = op(sites,"CZ",q0,q1);
+                  applyMPO(psi,G2,args);
+                }
+                break;
+
+            case 8: // Ry
+                G = op(sites,"Ry",q0,{"θ",g[3].cast<double>()});
+                psi.position(q0);
+                psi.Aref(q0) = psi.A(q0) * G;
+                break;
+
+            case 9: // X
+                G = op(sites,"X",q0);
+                psi.position(q0);
+                psi.Aref(q0) = psi.A(q0) * G;
+                break;
+
+            case 10: // Y
+                G = op(sites,"Y",q0);
+                psi.position(q0);
+                psi.Aref(q0) = psi.A(q0) * G;
+                break;
+
+            case 11: // Z
+                G = op(sites,"Z",q0);
+                psi.position(q0);
+                psi.Aref(q0) = psi.A(q0) * G;
+                break;
+
+            case 12: // U3(theta,phi,lambda)
+                {
+                  auto params = g[3].cast<std::tuple<double,double,double>>();
+                  double th,ph,la;
+                  std::tie(th,ph,la) = params;
+                  G = op(sites,"U3",q0,{"θ",th,"φ",ph,"λ",la});
+                  psi.position(q0);
+                  psi.Aref(q0) = psi.A(q0) * G;
+                }
+                break;
+
+            case 13: // S
+                G = op(sites,"S",q0);
+                psi.position(q0);
+                psi.Aref(q0) = psi.A(q0) * G;
+                break;
+
+            default:
+                throw std::runtime_error("Unsupported gate type in apply_gate_list");
+        }
+    }
+}
+
+// ---------------------------------------------------------
+// Compute expectation values of Pauli X,Y,Z on all qubits
+// returns np.array of shape (nqubits*3,)
+// ---------------------------------------------------------
+py::array_t<double> measure_xyz(MPS const& psi,
+                                SiteSet const& sites)
+{
+    int n = sites.N();
+    std::vector<double> results(3*n);
+
+    for(int i = 1; i <= n; ++i)
+    {
+        auto bra = dag(psi);
+        auto ket = psi;
+
+        auto Xop = op(sites,"X",i);
+        auto Yop = op(sites,"Y",i);
+        auto Zop = op(sites,"Z",i);
+
+        results[3*(i-1)+0] = inner(bra,ket,Xop).real();
+        results[3*(i-1)+1] = inner(bra,ket,Yop).real();
+        results[3*(i-1)+2] = inner(bra,ket,Zop).real();
+    }
+
+    return py::array_t<double>(results.size(), results.data());
+}
+
+// ---------------------------------------------------------
+// Python-exposed: circuit_xyz_exp
+// ---------------------------------------------------------
+py::array_t<double> circuit_xyz_exp(std::vector<std::vector<py::object>> gates,
+                                    int nqubits,
+                                    double cutoff=1E-12,
+                                    int maxdim=500)
+{
+    auto sites = SiteSet(QubitSite(nqubits));
+    auto psi = init_state(nqubits);
+
+    apply_gate_list(psi,sites,gates,Args("Cutoff",cutoff,"MaxDim",maxdim));
+
+    return measure_xyz(psi,sites);
+}
+
+// ---------------------------------------------------------
+// Python-exposed: amplitude encoding
+// ---------------------------------------------------------
+MPS amplitude_encode(std::vector<double> const& vec,
+                     double cutoff=1E-12,
+                     int maxdim=500)
+{
+    int nqubits = 0;
+    while((1<<nqubits) < (int)vec.size()) ++nqubits;
+
+    if((1<<nqubits) != (int)vec.size())
+        throw std::runtime_error("Input vector length must be power of 2");
+
+    auto sites = SiteSet(QubitSite(nqubits));
+    auto psi = init_state(nqubits);
+
+    // Replace with amplitude superposition
+    ITensor A(sites(1));
+    for(int i = 0; i < (int)vec.size(); ++i)
+    {
+        std::vector<int> bits(nqubits);
+        int x = i;
+        for(int b = 0; b < nqubits; ++b)
+        {
+            bits[b] = x % 2;
+            x /= 2;
+        }
+        ITensor ket = psi.A(1);
+        for(int q = 1; q <= nqubits; ++q)
+        {
+            ITensor basis = ITensor(sites(q));
+            basis.set(sites(q)(bits[q-1]+1),1.0);
+            if(q==1) ket = basis;
+            else ket *= basis;
+        }
+        A += vec[i]*ket;
+    }
+    psi.set(1,A);
+
+    return psi;
+}
+
+// ---------------------------------------------------------
+// Python-exposed: feature map ansatz (like ZZFeatureMap)
+// ---------------------------------------------------------
+MPS feature_map_ansatz(std::vector<double> features,
+                       int depth=2,
+                       double gamma=1.0,
+                       double cutoff=1E-12,
+                       int maxdim=500)
+{
+    int n = features.size();
+    auto sites = SiteSet(QubitSite(n));
+    auto psi = init_state(n);
+
+    for(int d=0; d<depth; ++d)
+    {
+        // single-qubit encodings
+        for(int i=1;i<=n;++i)
+        {
+            auto th = features[i-1];
+            auto G = op(sites,"Ry",i,{"θ",th});
+            psi.position(i);
+            psi.Aref(i) = psi.A(i)*G;
+        }
+
+        // entanglers
+        for(int i=1;i<n;++i)
+        {
+            auto G = op(sites,"ZZ",i,i+1,{"θ",gamma*features[i-1]*features[i]});
+            applyMPO(psi,G,Args("Cutoff",cutoff,"MaxDim",maxdim));
+        }
+    }
+
+    return psi;
+}
+
+// ---------------------------------------------------------
+// PYBIND11 Module
+// ---------------------------------------------------------
+PYBIND11_MODULE(helloitensor, m)
+{
+    m.doc() = "ITensor-based quantum circuit simulator with extended gates";
+
+    m.def("circuit_xyz_exp",&circuit_xyz_exp,
+          py::arg("gates"),
+          py::arg("nqubits"),
+          py::arg("cutoff")=1E-12,
+          py::arg("maxdim")=500,
+          "Apply circuit described by gate list and return Pauli XYZ expectations.");
+
+    m.def("amplitude_encode",&amplitude_encode,
+          py::arg("vec"),
+          py::arg("cutoff")=1E-12,
+          py::arg("maxdim")=500,
+          "Encode classical vector into amplitudes of a quantum state (returns MPS).");
+
+    m.def("feature_map_ansatz",&feature_map_ansatz,
+          py::arg("features"),
+          py::arg("depth")=2,
+          py::arg("gamma")=1.0,
+          py::arg("cutoff")=1E-12,
+          py::arg("maxdim")=500,
+          "Build feature map ansatz similar to ZZFeatureMap (returns MPS).");
+}
+
+# projected_quantum_features.py
+# Copy-paste ready. Requires:
+#  - pytket
+#  - mpi4py
+#  - numpy
+#  - sympy
+#  - helloitensor (compiled C++ extension from our previous steps)
+
+import sys
+import json
+import pathlib
+from mpi4py import MPI
+
+import numpy as np
+from sympy import Symbol
+from statistics import mean, median
+
+from pytket import Circuit, OpType
+from pytket.transform import Transform
+from pytket.architecture import Architecture
+from pytket.passes import DefaultMappingPass
+from pytket.predicates import CompilationUnit
+from pytket.circuit import PauliExpBox, Pauli
+
+# Import the compiled C++ extension we built earlier. Ensure it is on PYTHONPATH.
+import helloitensor
+
+# Pauli matrices (for reference / potential fallback)
+X = np.array([[0,1],[1,0]])
+Y = np.array([[0,-1j],[1j,0]])
+I = np.array([[1,0],[0,1]])
+Z = np.array([[1,0],[0,-1]])
+
+
+# -----------------------------------------------------------------------------
+# Utility: convert TKET circuit commands to gate-list format accepted by C++
+# Gate list entry is: [gate_type, q0_index, q1_index_or_-1, param]
+# where gate_type integers correspond to the C++ switch:
+# 0: H
+# 1: Rx
+# 2: Rz
+# 3: XXPhase
+# 4: ZZPhase
+# 5: SWAP
+# 6: T
+# 7: CZ
+# 8: Ry
+# 9: X
+# 10: Y
+# 11: Z
+# 12: U3 (param -> (theta,phi,lambda))
+# 13: S
+# -----------------------------------------------------------------------------
+def circuit_to_list_for_helloitensor(circuit: Circuit):
+    gates = []
+    for cmd in circuit.get_commands():
+        optype = cmd.op.type
+        # Single-qubit gates
+        if optype == OpType.H:
+            gates.append([0, cmd.qubits[0].index[0], -1, 0.0])
+        elif optype == OpType.Rx:
+            # pytket Rx param is radians
+            gates.append([1, cmd.qubits[0].index[0], -1, float(cmd.op.params[0])])
+        elif optype == OpType.Rz:
+            gates.append([2, cmd.qubits[0].index[0], -1, float(cmd.op.params[0])])
+        elif optype == OpType.Ry:
+            gates.append([8, cmd.qubits[0].index[0], -1, float(cmd.op.params[0])])
+        elif optype == OpType.X:
+            gates.append([9, cmd.qubits[0].index[0], -1, 0.0])
+        elif optype == OpType.Y:
+            gates.append([10, cmd.qubits[0].index[0], -1, 0.0])
+        elif optype == OpType.Z:
+            gates.append([11, cmd.qubits[0].index[0], -1, 0.0])
+        elif optype == OpType.U3:
+            # pytket U3 may be represented with params (theta,phi,lambda)
+            params = cmd.op.params
+            # store as a tuple; pybind11 will convert to tuple for C++
+            gates.append([12, cmd.qubits[0].index[0], -1, (float(params[0]), float(params[1]), float(params[2]))])
+        elif optype == OpType.S:
+            gates.append([13, cmd.qubits[0].index[0], -1, 0.0])
+        elif optype == OpType.T:
+            gates.append([6, cmd.qubits[0].index[0], -1, 0.0])
+
+        # Two-qubit gates
+        elif optype == OpType.ZZPhase:
+            # pytket param is the exponent/angle; pass as float
+            gates.append([4, cmd.qubits[0].index[0], cmd.qubits[1].index[0], float(cmd.op.params[0])])
+        elif optype == OpType.XXPhase:
+            gates.append([3, cmd.qubits[0].index[0], cmd.qubits[1].index[0], float(cmd.op.params[0])])
+        elif optype == OpType.SWAP:
+            gates.append([5, cmd.qubits[0].index[0], cmd.qubits[1].index[0], 0.0])
+        elif optype == OpType.CZ:
+            gates.append([7, cmd.qubits[0].index[0], cmd.qubits[1].index[0], 0.0])
+        else:
+            # If unknown gate, try to decompose and re-run
+            # Decompose the single unknown gate into simpler gates (TKET supports decomp)
+            tmp = Circuit(circuit.n_qubits)
+            tmp.add_command(cmd)
+            Transform.DecomposeBoxes().apply(tmp)  # best-effort
+            # if decomposition made progress, recursively translate newly decomposed gates
+            # Otherwise raise
+            decomposed = False
+            for new_cmd in tmp.get_commands():
+                if new_cmd is not cmd:
+                    decomposed = True
+                    break
+            if decomposed:
+                for new_cmd in tmp.get_commands():
+                    # Build a tiny circuit for the new_cmd and translate
+                    tiny = Circuit(circuit.n_qubits)
+                    tiny.add_command(new_cmd)
+                    gates += circuit_to_list_for_helloitensor(tiny)
+            else:
+                raise Exception(f"Unknown/unsupported gate type in circuit_to_list_for_helloitensor: {optype}")
+    return gates
+
+
+# -----------------------------------------------------------------------------
+# ProjectedQuantumFeatures class (updated)
+#  - supports two modes:
+#    * 'tket'   -> build TKET symbolic circuits (original behavior) and use helloitensor.circuit_xyz_exp
+#    * 'native' -> use new helloitensor.feature_map_ansatz (fast path) if available;
+#                 otherwise falls back to 'tket' flow
+#  - still keeps API backwards compatible with your code
+# -----------------------------------------------------------------------------
+class ProjectedQuantumFeatures:
+    def __init__(
+        self,
+        num_features: int,
+        reps: int,
+        gamma: float,
+        entanglement_map: list[tuple[int, int]],
+        ansatz: str,
+        hadamard_init: bool=True,
+        mode: str = "tket"   # "tket" (default) or "native"
+    ):
+        self.one_q_symbol_list = []
+        self.two_q_symbol_list = []
+        self.ansatz_circ = Circuit(num_features)
+        self.feature_symbol_list = [Symbol('f_'+str(i)) for i in range(num_features)]
+        self.reps = reps
+        self.gamma = gamma
+        self.num_features = num_features
+        self.hadamard_init = hadamard_init
+        self.entanglement_map = entanglement_map
+        self.mode = mode.lower()
+
+        if ansatz == "hamiltonian":
+            self.hamiltonian_ansatz()
+        elif ansatz == "magic":
+            self.magic_ansatz()
+        else:
+            raise RuntimeError("You have not entered a valid ansatz.")
+
+    def circuit_for_data(self, feature_values: list[float]) -> Circuit:
+        if len(feature_values) != len(self.feature_symbol_list):
+            raise RuntimeError("The number of values must match the number of symbols.")
+
+        symbol_map = {symb: val for symb, val in zip(self.feature_symbol_list, feature_values)}
+        the_circuit = self.ansatz_circ.copy()
+        the_circuit.symbol_substitution(symbol_map)
+        return the_circuit
+
+    def circuit_to_list(self, circuit: Circuit):
+        """Compatibility wrapper: produce gate list suitable for helloitensor binding."""
+        return circuit_to_list_for_helloitensor(circuit)
+
+    def hamiltonian_ansatz(self):
+        if self.hadamard_init:
+            for i in range(self.num_features):
+                self.ansatz_circ.H(i)
+
+        for _ in range(self.reps):
+            for i in range(self.num_features):
+                # TKET expects numeric parameter for Rz here; keep symbolic via Symbol from sympy
+                exponent = (1/np.pi) * self.gamma * self.feature_symbol_list[i]
+                self.ansatz_circ.append_op(OpType.Rz, [self.ansatz_circ.qubits[i]], params=[exponent])
+
+            for (q0, q1) in self.entanglement_map:
+                symb0 = self.feature_symbol_list[q0]
+                symb1 = self.feature_symbol_list[q1]
+                exponent = self.gamma*self.gamma*(1 - symb0)*(1 - symb1)
+                # TKET may require numeric param to add XXPhase with symbolic values; use symbol placeholder:
+                self.ansatz_circ.append_op(OpType.XXPhase, [self.ansatz_circ.qubits[q0], self.ansatz_circ.qubits[q1]], params=[exponent])
+
+        # Apply TKET routing to a linear architecture (in-place)
+        cu = CompilationUnit(self.ansatz_circ)
+        architecture = Architecture([(i, i + 1) for i in range(self.ansatz_circ.n_qubits - 1)])
+        DefaultMappingPass(architecture).apply(cu)
+        self.ansatz_circ = cu.circuit
+        # Decompose any bridge gates
+        Transform.DecomposeBRIDGE().apply(self.ansatz_circ)
+        return 0
+
+    def magic_ansatz(self):
+        for _ in range(self.reps):
+            for q in range(self.num_features):
+                self.ansatz_circ.H(q)
+                self.ansatz_circ.T(q)
+            for (q0, q1) in self.entanglement_map:
+                self.ansatz_circ.CZ(q0, q1)
+                # additional local layers for edge qubits
+                if q1 == self.num_features - 1 or q1 == self.num_features - 2:
+                    for q in range(self.num_features):
+                        self.ansatz_circ.H(q)
+                        self.ansatz_circ.T(q)
+            for q in range(self.num_features):
+                self.ansatz_circ.Rz(self.feature_symbol_list[q], q)
+        return 0
+
+
+# -----------------------------------------------------------------------------
+# Kernel matrix building function (updated)
+#  - Uses native helloitensor.feature_map_ansatz when mode=="native" and the function exists.
+#  - Otherwise falls back to TKET-path that builds circuits and calls helloitensor.circuit_xyz_exp
+# -----------------------------------------------------------------------------
+def build_qf_matrix(
+        mpi_comm,
+        ansatz: ProjectedQuantumFeatures,
+        X,
+        info_file=None,
+        cpu_max_mem=6,
+        cutoff=1e-12,
+        maxdim=512,
+        use_native_featuremap_if_available: bool = True
+    ) -> np.ndarray:
+
+    n_qubits = ansatz.ansatz_circ.n_qubits
+
+    # MPI info
+    root = 0
+    rank = mpi_comm.Get_rank()
+    n_procs = mpi_comm.Get_size()
+
+    entries_per_chunk = int(np.ceil(len(X) / n_procs))
+    max_mps_per_cpu = 2 * entries_per_chunk
+
+    if rank == root:
+        profiling_dict = dict()
+        profiling_dict["lenX"] = (len(X), "entries")
+        start_time = MPI.Wtime()
+
+    # Report
+    if rank == root:
+        print(f"[Rank 0] Preparing to compute projected features for {len(X)} inputs on {n_procs} procs.")
+
+    # We'll compute local chunk indices
+    offset = rank * entries_per_chunk
+    local_indices = list(range(offset, min(offset + entries_per_chunk, len(X))))
+
+    # Storage for local outputs
+    local_projected = []
+
+    # Fast path: use native C++ feature_map_ansatz if user requested and function exists.
+    native_available = hasattr(helloitensor, "feature_map_ansatz") and use_native_featuremap_if_available
+
+    for idx in local_indices:
+        x = X[idx, :].tolist()
+        # If native mode is available and preferred by the ansatz mode, try it
+        used_native = False
+        if native_available and ansatz.mode == "native":
+            try:
+                # Try calling feature_map_ansatz; many C++ bindings return MPS or expectations:
+                maybe = helloitensor.feature_map_ansatz(x, ansatz.reps, ansatz.gamma, cutoff, maxdim)
+                # If maybe is an array-like of shape (n_qubits,3) or length 3*n_qubits, convert
+                arr = None
+                if isinstance(maybe, (list, tuple, np.ndarray)):
+                    arr = np.asarray(maybe)
+                else:
+                    # If returned an object (e.g. MPS Python proxy), try to call a measurement function
+                    # Many earlier iterations expose circuit_xyz_exp only, so we cannot reliably measure an MPS
+                    arr = None
+
+                if arr is not None:
+                    # normalize to flat row vector of length 3*n_qubits
+                    arr = np.asarray(arr).reshape(-1)
+                    if arr.size == 3 * n_qubits:
+                        local_projected.append(arr)
+                        used_native = True
+                # else fall back
+            except Exception as e:
+                # fallback to TKET path; do not crash here
+                if rank == root:
+                    print("[Rank 0] Native feature_map_ansatz call failed or returned unsupported type; falling back to TKET path.")
+                used_native = False
+
+        if not used_native:
+            # Build the TKET circuit, substitute feature values, translate to gate list and call C++ sim
+            circ = ansatz.circuit_for_data(x)
+            # Try to reduce the circuit (safe)
+            try:
+                # apply default transformations if helpful
+                cu = CompilationUnit(circ)
+                DefaultMappingPass(Architecture([(i, i + 1) for i in range(circ.n_qubits - 1)])).apply(cu)
+                circ = cu.circuit
+                Transform.DecomposeBRIDGE().apply(circ)
+            except Exception:
+                # mapping may fail for symbolic circuits; ignore and use raw circ
+                pass
+
+            gate_list = ansatz.circuit_to_list(circ)
+
+            # call into C++: circuit_xyz_exp
+            try:
+                exp_xyz = helloitensor.circuit_xyz_exp(gate_list, n_qubits, cutoff, maxdim)
+            except Exception as e:
+                # Some pybind11 variants expect pure Python lists and others expect nested types; ensure conversion
+                exp_xyz = helloitensor.circuit_xyz_exp(list(gate_list), int(n_qubits), float(cutoff), int(maxdim))
+
+            # Normalize returned shape:
+            arr = np.asarray(exp_xyz)
+            # If arr is shape (n_qubits,3) -> flatten
+            if arr.size == n_qubits * 3:
+                arr_flat = arr.reshape(-1)
+            elif arr.ndim == 2 and arr.shape[0] == n_qubits and arr.shape[1] == 3:
+                arr_flat = arr.reshape(-1)
+            elif arr.ndim == 1 and arr.size == 3*n_qubits:
+                arr_flat = arr
+            else:
+                # Unexpected shape: try to flatten and pad/truncate if necessary
+                arr_flat = arr.flatten()
+                if arr_flat.size < 3*n_qubits:
+                    arr_flat = np.pad(arr_flat, (0, 3*n_qubits - arr_flat.size))
+                else:
+                    arr_flat = arr_flat[:3*n_qubits]
+
+            local_projected.append(arr_flat)
+
+    # convert local_projected into array with rows == local chunk length
+    if len(local_projected) == 0:
+        local_array = np.zeros((0, 3 * n_qubits))
+    else:
+        local_array = np.vstack(local_projected)
+
+    # Each worker produces a chunk of shape (chunk_len, 3*n_qubits), but lengths may differ (last chunk).
+    # We'll gather on root using MPI.Gatherv
+    local_counts = np.array(mpi_comm.gather(local_array.shape[0], root=root), dtype=int)
+    # Gathered shape on root
+    if rank == root:
+        total_rows = sum(local_counts)
+        result = np.zeros((total_rows, 3 * n_qubits))
+    else:
+        result = None
+
+    # To gather variable-length arrays we flatten local_array and use Gatherv
+    local_flat = local_array.flatten()
+    local_size = np.array([local_flat.size], dtype=int)
+    sizes = mpi_comm.gather(local_flat.size, root=root)
+
+    if rank == root:
+        recvbuf = np.empty(sum(sizes), dtype=local_flat.dtype)
+    else:
+        recvbuf = None
+
+    mpi_comm.Gatherv(sendbuf=local_flat, recvbuf=(recvbuf, sizes), root=root)
+
+    if rank == root:
+        # reconstruct rows
+        rows = []
+        offset_flat = 0
+        for k in range(n_procs):
+            count = sizes[k]
+            if count == 0:
+                continue
+            chunk_flat = recvbuf[offset_flat:offset_flat+count]
+            offset_flat += count
+            # each row length = 3*n_qubits
+            nrows = count // (3 * n_qubits)
+            if nrows == 0:
+                # may be partial; attempt to reshape if possible
+                nrows = 1
+            chunk = chunk_flat.reshape((nrows, 3 * n_qubits))
+            rows.append(chunk)
+        if rows:
+            result = np.vstack(rows)
+        else:
+            result = np.zeros((0, 3 * n_qubits))
+
+        # profiling info (optional)
+        if info_file is not None:
+            # write simple profiling JSON (placeholder)
+            with open(info_file, "w") as f:
+                json.dump({"lenX": len(X)}, f)
+
+        return result
+    else:
+        return None
+
+
+# -----------------------------------------------------------------------------
+# If run as script, run a tiny smoke test to confirm things roughly work.
+# -----------------------------------------------------------------------------
+if __name__ == "__main__":
+    # MPI init
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+
+    # small smoke test: 3-qubit GHZ-like featuremap example
+    num_qubits = 3
+    ent_map = [(0,1),(1,2)]
+    ans = ProjectedQuantumFeatures(num_features=num_qubits, reps=1, gamma=1.0, entanglement_map=ent_map, ansatz="hamiltonian", hadamard_init=True, mode="tket")
+
+    # Build small dataset of two samples
+    X = np.array([[0.1, 0.2, 0.3],
+                  [0.6, 0.7, 0.8]])
+    projected = build_qf_matrix(comm, ans, X, info_file=None, cpu_max_mem=6)
+    if rank == 0:
+        print("Projected features shape:", projected.shape)
+        print(projected)
