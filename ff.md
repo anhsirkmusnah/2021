@@ -1814,3 +1814,74 @@ if __name__ == "__main__":
     if rank == 0:
         print("Projected features shape:", projected.shape)
         print(projected)
+
+
+
+
+
+
+##############################
+## [1] Compiler Choice
+##############################
+
+# Use GCC for maximum HPC optimization
+# (Dataproc images typically ship with GCC 9+)
+CCCOM=mpicxx -m64 -std=c++17 -fPIC -O3 -march=native -funroll-loops -fopenmp -DNDEBUG
+
+##############################
+## [2] BLAS / LAPACK Backend
+##############################
+
+# Use Intel MKL if available (best performance on GCP with large memory + many cores)
+PLATFORM=mkl
+BLAS_LAPACK_LIBFLAGS=-L/opt/intel/mkl/lib/intel64 \
+  -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl
+BLAS_LAPACK_INCLUDEFLAGS=-I/opt/intel/mkl/include
+
+# Alternative: OpenBLAS (if MKL not installed)
+# PLATFORM=openblas
+# BLAS_LAPACK_LIBFLAGS=-L/usr/lib/x86_64-linux-gnu -lopenblas -lpthread
+# BLAS_LAPACK_INCLUDEFLAGS=-I/usr/include
+
+##############################
+## [3] HDF5 Support (optional)
+##############################
+
+# Enable if you want tensor storage / checkpointing in HDF5
+HDF5_PREFIX=/usr/lib/x86_64-linux-gnu/hdf5/openmpi
+
+##############################
+## [4] OpenMP & Threading
+##############################
+
+# Enable ITensor OpenMP threading
+ITENSOR_USE_OMP=1
+
+# Runtime environment (set in job scripts):
+# export OMP_NUM_THREADS=16
+# export MKL_NUM_THREADS=1   # prevent MKL thread contention
+# export OPENBLAS_NUM_THREADS=1
+
+##############################
+## [5] Optimization Flags
+##############################
+
+# Release mode flags
+OPTIMIZATIONS=-O3 -DNDEBUG -march=native -funroll-loops -ftree-vectorize -fstrict-aliasing -fomit-frame-pointer -Wall -Wno-unknown-pragmas
+
+# Debug mode flags
+DEBUGFLAGS=-DDEBUG -g -Wall -Wno-unknown-pragmas -pedantic
+
+# Build shared libraries (better for large clusters)
+ITENSOR_MAKE_DYLIB=1
+
+##############################
+## [MPI / mpi4py integration note]
+##############################
+# - ITensor itself is not MPI-native, but you can build your
+#   driver code with `mpicxx` (as above).
+# - mpi4py can interoperate by calling ITensor through C++ bindings
+#   or Python wrappers, distributing workloads at the process level.
+# - Each MPI rank will use ITensor with OpenMP threading inside.
+##############################
+
