@@ -1049,29 +1049,15 @@ def build_qf_matrix(
     X,
     info_file=None,
     cpu_max_mem=6,
-    use_enhanced_features: bool = False,  # NEW: Enhanced features flag
-    include_correlations: bool = False,   # NEW: Correlation features flag
-    use_batch_processing: bool = False,   # NEW: Batch processing flag
-    correlation_config: dict = None       # NEW: Configuration for correlations
+    use_enhanced_features: bool = False,
+    include_correlations: bool = False,
+    use_batch_processing: bool = False,
+    correlation_config: dict = None
 ) -> np.ndarray:
-    """Calculation of entries of the kernel matrix with enhanced features.
+    """
+    Calculation of quantum feature matrix with CORRECT MPI reduce operations.
     
-    Args:
-        mpi_comm: The MPI communicator created by the caller of this function.
-        ansatz: a symbolic circuit describing the ansatz.
-        X: A 2D array where `X[i, :]` corresponds to the i-th data point.
-        info_file: The name of the file where to save performance information.
-        cpu_max_mem: The number of GB available in each CPU. Defaults to 6 GB.
-        use_enhanced_features: If True, extract additional entanglement features (4 per qubit).
-        include_correlations: If True, add correlation features.
-        use_batch_processing: If True, use batch ITensor processing for efficiency.
-        correlation_config: Dictionary with keys:
-            - 'type': 'adjacent', 'skip', 'multiscale', or 'xyz'
-            - 'skip_distance': int (for 'skip' and 'xyz' types)
-            - 'skip_distances': list of ints (for 'multiscale' type)
-    
-    Returns:
-        A projected feature matrix of dimensions `len(X)` x `feature_dim`.
+    CRITICAL FIX: Ensures all processes participate in MPI operations correctly.
     """
     n_qubits = ansatz.ansatz_circ.n_qubits
     
@@ -1081,6 +1067,9 @@ def build_qf_matrix(
     n_procs = mpi_comm.Get_size()
     entries_per_chunk = int(np.ceil(len(X) / n_procs))
     
+    # CRITICAL: Synchronize before starting
+    mpi_comm.Barrier()
+    
     # Dictionary to keep track of profiling information
     if rank == root:
         profiling_dict = dict()
@@ -1088,7 +1077,6 @@ def build_qf_matrix(
         start_time = MPI.Wtime()
         print(f"Using enhanced features: {use_enhanced_features}")
         print(f"Including correlations: {include_correlations}")
-        print(f"Batch processing: {use_batch_processing}")
         print(f"SVD cutoff: {ansatz.svd_cutoff}")
         sys.stdout.flush()
     
@@ -1096,54 +1084,52 @@ def build_qf_matrix(
     if correlation_config is None:
         correlation_config = {'type': 'adjacent'}
     
-    # Determine feature dimensions
+    # Determine feature dimensions (MUST BE SAME ON ALL RANKS)
     if use_enhanced_features:
-        feature_dim = n_qubits * 4  # X, Y, Z, + entanglement per qubit
+        feature_dim = n_qubits * 4
     else:
-        feature_dim = n_qubits * 3  # X, Y, Z per qubit
+        feature_dim = n_qubits * 3
     
-    # Add correlation dimensions based on type
     if include_correlations:
         corr_type = correlation_config.get('type', 'adjacent')
         
         if corr_type == 'adjacent':
             feature_dim += (n_qubits - 1)
-        
         elif corr_type == 'skip':
             skip_dist = correlation_config.get('skip_distance', 2)
             feature_dim += max(0, n_qubits - skip_dist)
-        
         elif corr_type == 'multiscale':
             skip_distances = correlation_config.get('skip_distances', [1, 2, 3])
             for skip_dist in skip_distances:
                 if skip_dist < n_qubits:
                     feature_dim += (n_qubits - skip_dist)
-        
         elif corr_type == 'xyz':
             skip_dist = correlation_config.get('skip_distance', 1)
             feature_dim += 3 * max(0, n_qubits - skip_dist)
     
-    # Report configuration
     if rank == root:
         print(f"\nContracting MPS from dataset with {len(X)} samples...")
         print(f"Feature dimension: {feature_dim}")
-        if include_correlations:
-            print(f"Correlation type: {correlation_config.get('type', 'adjacent')}")
+        print(f"Processes: {n_procs}")
+        print(f"Entries per process: {entries_per_chunk}")
         sys.stdout.flush()
     
-    # Process samples
+    # CRITICAL: Each process computes its chunk
     exp_x_chunk = []
     exp_x_time = []
     progress_bar = 0
-    progress_tick = int(np.ceil(entries_per_chunk / 10))
+    progress_tick = max(1, int(np.ceil(entries_per_chunk / 10)))
     
     for k in range(entries_per_chunk):
         offset = rank * entries_per_chunk
-        if k + offset < len(X):
-            circ = ansatz.circuit_for_data(X[k+offset, :])
-            circ_gates = ansatz.circuit_to_list(circ)
-            
+        global_idx = k + offset
+        
+        # Check if this process has data for this index
+        if global_idx < len(X):
             time0 = MPI.Wtime()
+            
+            circ = ansatz.circuit_for_data(X[global_idx, :])
+            circ_gates = ansatz.circuit_to_list(circ)
             
             # Extract base features
             if use_enhanced_features:
@@ -1153,7 +1139,7 @@ def build_qf_matrix(
                 features = circuit_xyz_exp(circ_gates, n_qubits)
                 features = np.asarray(features).flatten()
             
-            # Add correlation features based on configuration
+            # Add correlation features
             if include_correlations:
                 corr_type = correlation_config.get('type', 'adjacent')
                 
@@ -1184,41 +1170,70 @@ def build_qf_matrix(
                 sys.stdout.flush()
                 progress_bar += 1
     
-    # Reshape and aggregate results
-    if rank == n_procs-1:
-        exp_x_chunk = np.asarray(exp_x_chunk).reshape((len(X) - (rank*entries_per_chunk), feature_dim))
+    # CRITICAL: Convert to numpy array with correct shape for this rank
+    if len(exp_x_chunk) > 0:
+        exp_x_chunk = np.asarray(exp_x_chunk).reshape((len(exp_x_chunk), feature_dim))
     else:
-        exp_x_chunk = np.asarray(exp_x_chunk).reshape((entries_per_chunk, feature_dim))
+        # Empty chunk - create zero-sized array with correct feature dimension
+        exp_x_chunk = np.zeros((0, feature_dim))
     
-    ind1 = entries_per_chunk * rank
-    if rank != n_procs - 1:
-        ind2 = entries_per_chunk * (rank + 1)
-    else:
-        ind2 = len(X)
-    
-    projected_features = np.zeros(shape=(len(X), feature_dim))
-    projected_features[ind1:ind2, :] = exp_x_chunk
-    
-    # Reporting
     if rank == root:
         print("100%")
+        print(f"[Rank 0] Processed {len(exp_x_chunk)} samples")
+    
+    # CRITICAL: Synchronize before gather
+    mpi_comm.Barrier()
+    
+    # FIXED: Use Allgather to collect chunk sizes from all processes
+    local_chunk_size = len(exp_x_chunk)
+    all_chunk_sizes = mpi_comm.allgather(local_chunk_size)
+    
+    if rank == root:
+        print(f"Chunk sizes from all ranks: {all_chunk_sizes}")
+        sys.stdout.flush()
+    
+    # FIXED: Gather all chunks to root using proper MPI pattern
+    all_chunks = mpi_comm.gather(exp_x_chunk, root=root)
+    
+    # CRITICAL: Only root assembles final result
+    if rank == root:
+        # Concatenate all non-empty chunks in order
+        valid_chunks = [chunk for chunk in all_chunks if len(chunk) > 0]
+        
+        if len(valid_chunks) > 0:
+            projected_features = np.vstack(valid_chunks)
+        else:
+            projected_features = np.zeros((0, feature_dim))
+        
+        # Verify correct total size
+        expected_size = len(X)
+        actual_size = projected_features.shape[0]
+        
+        if expected_size != actual_size:
+            print(f"WARNING: Size mismatch! Expected {expected_size}, got {actual_size}")
+        else:
+            print(f"SUCCESS: Assembled {actual_size} samples correctly")
+        
+        # Timing statistics
         duration = sum(exp_x_time)
-        print(f"[Rank 0] MPS of chunk X contracted. Time taken: {round(duration,2)} seconds.")
+        print(f"[Rank 0] MPS contracted. Time taken: {round(duration,2)} seconds.")
         profiling_dict["r0_circ_sim"] = [duration, "seconds"]
         
         if len(exp_x_time) > 0:
             average = mean(exp_x_time)
-            print(f"\tAverage time per MPS contraction: {round(average,4)} seconds.")
+            print(f"\tAverage time per MPS: {round(average,4)} seconds.")
             profiling_dict["avg_circ_sim"] = [average, "seconds"]
             profiling_dict["median_circ_sim"] = [median(exp_x_time), "seconds"]
         
         print(f"Feature dimension: {feature_dim}")
         print("\nFinished contracting all MPS.")
         sys.stdout.flush()
-    
-    projected_features = mpi_comm.reduce(projected_features, op=MPI.SUM, root=root)
-    
-    return projected_features
+        
+        return projected_features
+    else:
+        # Non-root processes return None
+        return None
+
 
 
 # NEW: Helper function for fraud detection integration with LightGBM
@@ -1475,7 +1490,7 @@ def generate_projectedQfeatures(
     data_feature, 
     reps, 
     gamma, 
-    target_label=None,  # Made optional with default
+    target_label=None,
     info='quantum_features', 
     slice_size=50000, 
     train_flag=False,
@@ -1484,48 +1499,30 @@ def generate_projectedQfeatures(
     include_correlations=True,
     correlation_config=None,
     use_batch_processing=False,
-    mpi_comm=None  # NEW: Allow external MPI comm or use internal
+    mpi_comm=None
 ):
     """
-    Generate projected quantum features with enhanced capabilities for fraud detection.
+    Generate projected quantum features with CORRECT MPI operations.
     
-    This function can be imported and used as a library function.
-    
-    Args:
-        data_feature: Input classical features (numpy array or pandas DataFrame)
-        reps: Number of circuit repetitions
-        gamma: Gamma hyperparameter for ansatz
-        target_label: Target label column (optional, not used in feature generation)
-        info: String identifier for output file naming
-        slice_size: Number of samples to process per batch (default: 50000)
-        train_flag: Whether to fit and save scaler (True for training data)
-        svd_cutoff: SVD truncation cutoff (default: 1e-5 for fraud detection)
-        use_enhanced_features: Extract XYZ + entanglement features (default: True)
-        include_correlations: Include correlation features (default: True)
-        correlation_config: Configuration dict for correlation extraction
-        use_batch_processing: Use batch ITensor processing (default: False)
-        mpi_comm: MPI communicator (if None, uses internal MPI initialization)
-    
-    Returns:
-        Combined classical + quantum feature array (or None if non-root process)
+    CRITICAL FIX: Proper rank checking and data assembly across slices.
     """
-    # Use provided MPI comm or initialize internal one
+    # Initialize MPI if not provided
     if mpi_comm is None:
         mpi_comm = get_mpi_comm()
     
     rank = get_rank()
+    root = 0
     start_time = time.time()
     
-    if rank == _root:
+    if rank == root:
         print(f"\n{'='*70}")
-        print(f"QUANTUM FEATURE GENERATION - FRAUD DETECTION OPTIMIZED")
+        print(f"QUANTUM FEATURE GENERATION - MPI-CORRECTED")
         print(f"{'='*70}")
         print(f"Configuration:")
         print(f"  - SVD Cutoff: {svd_cutoff}")
         print(f"  - Enhanced Features: {use_enhanced_features}")
         print(f"  - Include Correlations: {include_correlations}")
         print(f"  - Correlation Config: {correlation_config}")
-        print(f"  - Batch Processing: {use_batch_processing}")
         print(f"  - Slice Size: {slice_size}")
         print(f"  - Train Flag: {train_flag}")
         print(f"{'='*70}\n")
@@ -1535,51 +1532,72 @@ def generate_projectedQfeatures(
     data_size = data_feature.shape[0]
     classical_features = np.array(data_feature)
     
-    if rank == _root:
+    if rank == root:
         print(f"[INFO] Input data shape: {classical_features.shape}")
         print(f"[INFO] Number of features: {num_features}")
         print(f"[INFO] Number of samples: {data_size}")
     
-    # Apply scaling
-    classical_features = apply_scaling(classical_features, train_flag)
+    # CRITICAL: All processes must have the scaled data
+    # Apply scaling (root does fit_transform, broadcasts to all)
+    if train_flag:
+        if rank == root:
+            scaler = StandardScaler()
+            classical_features = scaler.fit_transform(classical_features)
+            
+            import os
+            os.makedirs('./model', exist_ok=True)
+            with open('./model/scaler.pkl', 'wb') as f:
+                pickle.dump(scaler, f)
+            print(f"[INFO] Scaler fitted and saved")
+        else:
+            classical_features = None
+        
+        # Broadcast scaled data to all processes
+        classical_features = mpi_comm.bcast(classical_features, root=root)
+    else:
+        # All processes load the same scaler
+        with open('./model/scaler.pkl', 'rb') as f:
+            scaler = pickle.load(f)
+        classical_features = scaler.transform(classical_features)
     
-    # Create ansatz with enhanced configuration
+    # CRITICAL: Barrier to ensure all have data
+    mpi_comm.Barrier()
+    
+    # Create ansatz (same on all processes)
     ansatz = create_ansatz(num_features, reps, gamma, svd_cutoff=svd_cutoff)
     
-    # Default correlation configuration for fraud detection
+    # Default correlation configuration
     if correlation_config is None:
         correlation_config = {
             'type': 'multiscale',
             'skip_distances': [1, 2, 3]
         }
     
-    if rank == _root:
+    if rank == root:
         print(f"\n[INFO] Starting quantum feature extraction...")
         print(f"[INFO] Processing {data_size} samples in slices of {slice_size}")
     
-    combined_feature_list = []
+    # CRITICAL: Only root collects results
+    combined_feature_list = [] if rank == root else None
     
-    # Process data in slices for memory efficiency
-    num_slices = data_size // slice_size + (1 if data_size % slice_size > 0 else 0)
+    # Process data in slices
+    num_slices = (data_size + slice_size - 1) // slice_size  # Ceiling division
     
     for i in range(num_slices):
         slice_start = i * slice_size
+        slice_end = min(slice_start + slice_size, data_size)
         
-        if i == num_slices - 1 and data_size % slice_size != 0:
-            slice_end = slice_start + (data_size % slice_size)
-        else:
-            slice_end = slice_start + slice_size
-        
+        # All processes get the same slice
         classical_features_split = classical_features[slice_start:slice_end]
         
-        if rank == _root:
+        if rank == root:
             print(f"\n{'='*60}")
             print(f"Processing Slice {i+1}/{num_slices}")
             print(f"{'='*60}")
             print(f"  Slice range: [{slice_start}:{slice_end}]")
             print(f"  Slice shape: {classical_features_split.shape}")
         
-        # Generate quantum features with enhanced configuration
+        # CRITICAL: All processes participate in build_qf_matrix
         slice_timer = time.time()
         quantum_features_split = build_qf_matrix(
             mpi_comm, 
@@ -1591,11 +1609,19 @@ def generate_projectedQfeatures(
             use_batch_processing=use_batch_processing
         )
         
-        if rank == _root:
+        # CRITICAL: Only root has the result
+        if rank == root:
             slice_duration = time.time() - slice_timer
             print(f"\n[TIMING] Slice processing time: {slice_duration:.2f} seconds")
             print(f"[INFO] Quantum feature slice shape: {quantum_features_split.shape}")
             print(f"[INFO] Classical feature slice shape: {classical_features_split.shape}")
+            
+            # Verify sizes match
+            if quantum_features_split.shape[0] != classical_features_split.shape[0]:
+                print(f"ERROR: Size mismatch in slice {i+1}!")
+                print(f"  Classical: {classical_features_split.shape[0]}")
+                print(f"  Quantum: {quantum_features_split.shape[0]}")
+                raise ValueError("MPI gather failed - size mismatch")
             
             # Combine classical and quantum features
             combined_features_split = np.concatenate(
@@ -1604,7 +1630,7 @@ def generate_projectedQfeatures(
             )
             print(f"[INFO] Combined feature slice shape: {combined_features_split.shape}")
             
-            # Calculate feature statistics
+            # Statistics
             print(f"\n[STATS] Quantum Features for this slice:")
             print(f"  - Min: {np.min(quantum_features_split):.6f}")
             print(f"  - Max: {np.max(quantum_features_split):.6f}")
@@ -1612,9 +1638,12 @@ def generate_projectedQfeatures(
             print(f"  - Std: {np.std(quantum_features_split):.6f}")
             
             combined_feature_list.append(combined_features_split)
+        
+        # CRITICAL: Barrier between slices
+        mpi_comm.Barrier()
     
-    # Aggregate all slices
-    if rank == _root:
+    # CRITICAL: Only root aggregates and returns
+    if rank == root:
         print(f"\n{'='*60}")
         print(f"AGGREGATING ALL SLICES")
         print(f"{'='*60}")
@@ -1622,19 +1651,28 @@ def generate_projectedQfeatures(
         if len(combined_feature_list) > 1:
             final_features = np.concatenate(combined_feature_list, axis=0)
             print(f"[INFO] Concatenated {len(combined_feature_list)} slices")
-        else:
+        elif len(combined_feature_list) == 1:
             final_features = combined_feature_list[0]
             print(f"[INFO] Single slice processed")
+        else:
+            raise ValueError("No features generated!")
+        
+        # Verify final size
+        if final_features.shape[0] != data_size:
+            print(f"ERROR: Final size mismatch!")
+            print(f"  Expected: {data_size}")
+            print(f"  Got: {final_features.shape[0]}")
+            raise ValueError("Final feature array has wrong size")
         
         print(f"[INFO] Final feature array shape: {final_features.shape}")
         print(f"[INFO] Classical features: {num_features}")
         print(f"[INFO] Quantum features: {final_features.shape[1] - num_features}")
         print(f"[INFO] Total features: {final_features.shape[1]}")
         
-        # Save features with enhanced metadata
+        # Save with metadata
         save_array(final_features, info + '_quantum_enhanced')
         
-        # Calculate total execution time
+        # Total timing
         total_duration = time.time() - start_time
         print(f"\n{'='*60}")
         print(f"GENERATION COMPLETE")
@@ -1644,8 +1682,10 @@ def generate_projectedQfeatures(
         print(f"{'='*60}\n")
         
         return final_features
-    
-    return None
+    else:
+        # Non-root processes return None
+        return None
+
 
 
 def generate_fraud_detection_features(
