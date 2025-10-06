@@ -244,6 +244,7 @@ class QubitSite
 
 
 
+
 #include "itensor/all.h"
 #include "itensor/util/print_macro.h"
 #include <pybind11/pybind11.h>
@@ -267,7 +268,7 @@ struct data
     float alpha;
 };
 
-// Enhanced apply_gates3 with input validation, optimized positioning, and configurable cutoff
+// Enhanced apply_gates3 with all improvements
 MPS apply_gates3(std::vector<std::tuple<int,int,int,float>> circuits, Qubit site_inds, int N, double cutoff){
     
     // Input validation for production use
@@ -285,14 +286,14 @@ MPS apply_gates3(std::vector<std::tuple<int,int,int,float>> circuits, Qubit site
         if(i1 < 0 || i1 >= N) {
             throw std::out_of_range("Gate index1 out of bounds");
         }
-        if(i2 >= N || i2 < -1) {  // -1 is valid for single-qubit gates
+        if(i2 >= N || i2 < -1) {
             throw std::out_of_range("Gate index2 out of bounds");
         }
     }
     
     // Define variables and constants with high precision
     std::complex<double> i(0.0, 1.0);
-    const double pi = M_PI;  // Use standard library constant
+    const double pi = M_PI;
     
     // Initialize site indices and states
     auto init = InitState(site_inds);
@@ -334,7 +335,7 @@ MPS apply_gates3(std::vector<std::tuple<int,int,int,float>> circuits, Qubit site
             new_MPS.noPrime();
             psi.set(i1+1,new_MPS);
             
-        } else if (sym == 3){  // XXPhase - Optimized positioning
+        } else if (sym == 3){  // XXPhase - Optimized
             psi.position(std::min(i1+1, i2+1));
             
             auto opx1 = op(site_inds,"X",i1+1, {"alpha=",a});
@@ -384,24 +385,27 @@ MPS apply_gates3(std::vector<std::tuple<int,int,int,float>> circuits, Qubit site
             psi.set(i1+1,U);
             psi.set(i2+1,S*V);
             
-        } else if (sym == 6){  // T gate - NEW
+        } else if (sym == 6){  // T gate
             auto G = op(site_inds,"T",i1+1);
             psi.position(i1+1);
             auto new_MPS = G*psi(i1+1);
             new_MPS.noPrime();
             psi.set(i1+1,new_MPS);
             
-        } else if (sym == 7){  // CZ gate - NEW
+        } else if (sym == 7){  // CZ gate - FIXED
             psi.position(std::min(i1+1, i2+1));
             
-            // CZ gate implementation
-            auto op_z = op(site_inds,"Z",i2+1);
-            auto op_proj = op(site_inds,"projDn",i1+1);
+            auto wf = psi(i1+1) * psi(i2+1);
             
-            // CZ = I ⊗ I + |1⟩⟨1| ⊗ (Z - I)
-            auto wf = psi(i1+1)*psi(i2+1);
-            auto controlled_z = op_proj * op_z;
-            wf *= controlled_z;
+            // CZ = |0⟩⟨0| ⊗ I + |1⟩⟨1| ⊗ Z
+            auto op_proj_up = op(site_inds,"projUp",i1+1);
+            auto op_proj_dn = op(site_inds,"projDn",i1+1);
+            auto op_id = op(site_inds,"Identity",i2+1);
+            auto op_z = op(site_inds,"Z",i2+1);
+            
+            auto cz_gate = op_proj_up * op_id + op_proj_dn * op_z;
+            
+            wf *= cz_gate;
             wf.noPrime();
             
             auto [U,S,V] = svd(wf,inds(psi(i1+1)),{"Cutoff=",cutoff});
@@ -459,7 +463,6 @@ std::vector<std::vector<T1>> circuit_xyz_exp(std::vector<std::tuple<int,int,int,
     MPS tensor_mps = apply_gates3(tensor_vec, tensor_sites, no_sites, 1E-8);
     
     std::vector<std::vector<T1>> return_vec;
-    auto start_itensor = std::chrono::high_resolution_clock::now();
     
     for (int i=0; i<no_sites; i++){
         std::vector<T1> xyz;
@@ -475,11 +478,10 @@ std::vector<std::vector<T1>> circuit_xyz_exp(std::vector<std::tuple<int,int,int,
         return_vec.push_back(xyz);
     }
     
-    auto end_itensor = std::chrono::high_resolution_clock::now();
     return return_vec;
 }
 
-// NEW: Enhanced feature extraction with entanglement metrics
+// Enhanced feature extraction with entanglement metrics
 template<typename T1, typename T2>
 std::vector<std::vector<T1>> circuit_xyz_exp_enhanced(std::vector<std::tuple<int,int,int,T2>> tensor_vec, int no_sites, double cutoff = 1E-8) {
     Qubit tensor_sites = Qubit(no_sites);
@@ -491,7 +493,6 @@ std::vector<std::vector<T1>> circuit_xyz_exp_enhanced(std::vector<std::tuple<int
         std::vector<T1> features;
         tensor_mps.position(i+1);
         
-        // Original XYZ expectation values
         auto scalar_x = eltC((dag(prime(tensor_mps.A(i+1),"Site"))*tensor_sites.op("X_half",i+1)*tensor_mps.A(i+1))).real();
         auto scalar_y = eltC((dag(prime(tensor_mps.A(i+1),"Site"))*tensor_sites.op("Y_half",i+1)*tensor_mps.A(i+1))).real();
         auto scalar_z = eltC((dag(prime(tensor_mps.A(i+1),"Site"))*tensor_sites.op("Z_half",i+1)*tensor_mps.A(i+1))).real();
@@ -500,12 +501,12 @@ std::vector<std::vector<T1>> circuit_xyz_exp_enhanced(std::vector<std::tuple<int
         features.push_back(scalar_y);
         features.push_back(scalar_z);
         
-        // Entanglement proxy: von Neumann entropy approximation via bond dimension
+        // Entanglement proxy via bond dimension
         if(i < no_sites-1) {
             auto bond_dim = commonIndex(tensor_mps(i+1), tensor_mps(i+2)).dim();
             features.push_back(static_cast<T1>(std::log(static_cast<double>(bond_dim))));
         } else {
-            features.push_back(static_cast<T1>(0.0));  // No bond for last qubit
+            features.push_back(static_cast<T1>(0.0));
         }
         
         return_vec.push_back(features);
@@ -514,7 +515,7 @@ std::vector<std::vector<T1>> circuit_xyz_exp_enhanced(std::vector<std::tuple<int
     return return_vec;
 }
 
-// NEW: Extract correlation features between adjacent qubits
+// FIXED: Adjacent correlations
 template<typename T1, typename T2>
 std::vector<T1> circuit_correlations(std::vector<std::tuple<int,int,int,T2>> tensor_vec, int no_sites, double cutoff = 1E-8) {
     Qubit tensor_sites = Qubit(no_sites);
@@ -522,25 +523,26 @@ std::vector<T1> circuit_correlations(std::vector<std::tuple<int,int,int,T2>> ten
     
     std::vector<T1> correlations;
     
-    // Extract ZZ correlations between adjacent qubits
     for (int i=0; i<no_sites-1; i++){
         tensor_mps.position(i+1);
         
+        auto wf = tensor_mps(i+1) * tensor_mps(i+2);
         auto op_z1 = tensor_sites.op("Z_half",i+1);
         auto op_z2 = tensor_sites.op("Z_half",i+2);
         
-        auto wf = tensor_mps(i+1) * tensor_mps(i+2);
-        auto wf_prime = prime(wf, "Site");
-        auto op_combined = op_z1 * op_z2;
+        auto wf_dag = dag(prime(wf, "Site"));
+        auto temp = wf_dag * op_z1;
+        temp *= op_z2;
+        temp *= wf;
         
-        auto corr = eltC((dag(wf_prime) * op_combined * wf)).real();
+        auto corr = eltC(temp).real();
         correlations.push_back(corr);
     }
     
     return correlations;
 }
 
-// NEW: Extract skip-level correlations (non-adjacent qubits)
+// FIXED: Skip-level correlations
 template<typename T1, typename T2>
 std::vector<T1> circuit_skip_correlations(
     std::vector<std::tuple<int,int,int,T2>> tensor_vec, 
@@ -557,31 +559,31 @@ std::vector<T1> circuit_skip_correlations(
     
     std::vector<T1> skip_correlations;
     
-    // Extract ZZ correlations between qubits separated by skip_distance
     for (int i=0; i<no_sites-skip_distance; i++){
         tensor_mps.position(i+1);
         
-        auto op_z1 = tensor_sites.op("Z_half",i+1);
-        auto op_z2 = tensor_sites.op("Z_half",i+1+skip_distance);
-        
-        // Contract tensors between i and i+skip_distance
         auto wf = tensor_mps(i+1);
         for(int j=1; j<skip_distance; j++) {
             wf = wf * tensor_mps(i+1+j);
         }
         wf = wf * tensor_mps(i+1+skip_distance);
         
-        auto wf_prime = prime(wf, "Site");
-        auto op_combined = op_z1 * op_z2;
+        auto op_z1 = tensor_sites.op("Z_half",i+1);
+        auto op_z2 = tensor_sites.op("Z_half",i+1+skip_distance);
         
-        auto corr = eltC((dag(wf_prime) * op_combined * wf)).real();
+        auto wf_dag = dag(prime(wf, "Site"));
+        auto temp = wf_dag * op_z1;
+        temp *= op_z2;
+        temp *= wf;
+        
+        auto corr = eltC(temp).real();
         skip_correlations.push_back(corr);
     }
     
     return skip_correlations;
 }
 
-// NEW: Multi-scale correlations - extract multiple skip distances at once
+// FIXED: Multi-scale correlations
 template<typename T1, typename T2>
 std::vector<std::vector<T1>> circuit_multiscale_correlations(
     std::vector<std::tuple<int,int,int,T2>> tensor_vec, 
@@ -596,7 +598,7 @@ std::vector<std::vector<T1>> circuit_multiscale_correlations(
     
     for(int skip_dist : skip_distances) {
         if(skip_dist < 1 || skip_dist >= no_sites) {
-            continue; // Skip invalid distances
+            continue;
         }
         
         std::vector<T1> correlations_at_distance;
@@ -604,20 +606,21 @@ std::vector<std::vector<T1>> circuit_multiscale_correlations(
         for (int i=0; i<no_sites-skip_dist; i++){
             tensor_mps.position(i+1);
             
-            auto op_z1 = tensor_sites.op("Z_half",i+1);
-            auto op_z2 = tensor_sites.op("Z_half",i+1+skip_dist);
-            
-            // Contract tensors between i and i+skip_dist
             auto wf = tensor_mps(i+1);
             for(int j=1; j<skip_dist; j++) {
                 wf = wf * tensor_mps(i+1+j);
             }
             wf = wf * tensor_mps(i+1+skip_dist);
             
-            auto wf_prime = prime(wf, "Site");
-            auto op_combined = op_z1 * op_z2;
+            auto op_z1 = tensor_sites.op("Z_half",i+1);
+            auto op_z2 = tensor_sites.op("Z_half",i+1+skip_dist);
             
-            auto corr = eltC((dag(wf_prime) * op_combined * wf)).real();
+            auto wf_dag = dag(prime(wf, "Site"));
+            auto temp = wf_dag * op_z1;
+            temp *= op_z2;
+            temp *= wf;
+            
+            auto corr = eltC(temp).real();
             correlations_at_distance.push_back(corr);
         }
         
@@ -627,7 +630,7 @@ std::vector<std::vector<T1>> circuit_multiscale_correlations(
     return all_correlations;
 }
 
-// NEW: XX, YY, ZZ correlations (captures different fraud patterns)
+// FIXED: XYZ correlations
 template<typename T1, typename T2>
 std::vector<std::vector<T1>> circuit_xyz_correlations(
     std::vector<std::tuple<int,int,int,T2>> tensor_vec, 
@@ -640,39 +643,44 @@ std::vector<std::vector<T1>> circuit_xyz_correlations(
     
     std::vector<std::vector<T1>> xyz_correlations;
     
-    // For each pair of qubits at skip_distance
     for (int i=0; i<no_sites-skip_distance; i++){
         tensor_mps.position(i+1);
         
         std::vector<T1> xyz_corr_pair;
         
-        // Contract tensors between i and i+skip_distance
         auto wf = tensor_mps(i+1);
         for(int j=1; j<skip_distance; j++) {
             wf = wf * tensor_mps(i+1+j);
         }
         wf = wf * tensor_mps(i+1+skip_distance);
-        auto wf_prime = prime(wf, "Site");
+        
+        auto wf_dag = dag(prime(wf, "Site"));
         
         // XX correlation
         auto op_x1 = tensor_sites.op("X_half",i+1);
         auto op_x2 = tensor_sites.op("X_half",i+1+skip_distance);
-        auto op_xx = op_x1 * op_x2;
-        auto corr_xx = eltC((dag(wf_prime) * op_xx * wf)).real();
+        auto temp_xx = wf_dag * op_x1;
+        temp_xx *= op_x2;
+        temp_xx *= wf;
+        auto corr_xx = eltC(temp_xx).real();
         xyz_corr_pair.push_back(corr_xx);
         
         // YY correlation
         auto op_y1 = tensor_sites.op("Y_half",i+1);
         auto op_y2 = tensor_sites.op("Y_half",i+1+skip_distance);
-        auto op_yy = op_y1 * op_y2;
-        auto corr_yy = eltC((dag(wf_prime) * op_yy * wf)).real();
+        auto temp_yy = wf_dag * op_y1;
+        temp_yy *= op_y2;
+        temp_yy *= wf;
+        auto corr_yy = eltC(temp_yy).real();
         xyz_corr_pair.push_back(corr_yy);
         
         // ZZ correlation
         auto op_z1 = tensor_sites.op("Z_half",i+1);
         auto op_z2 = tensor_sites.op("Z_half",i+1+skip_distance);
-        auto op_zz = op_z1 * op_z2;
-        auto corr_zz = eltC((dag(wf_prime) * op_zz * wf)).real();
+        auto temp_zz = wf_dag * op_z1;
+        temp_zz *= op_z2;
+        temp_zz *= wf;
+        auto corr_zz = eltC(temp_zz).real();
         xyz_corr_pair.push_back(corr_zz);
         
         xyz_correlations.push_back(xyz_corr_pair);
@@ -681,14 +689,13 @@ std::vector<std::vector<T1>> circuit_xyz_correlations(
     return xyz_correlations;
 }
 
-// NEW: Batch processing for improved throughput
+// Batch processing
 template<typename T1, typename T2>
 std::vector<std::vector<std::vector<T1>>> circuit_xyz_exp_batch(
     std::vector<std::vector<std::tuple<int,int,int,T2>>> batch_circuits, 
     int no_sites,
     double cutoff = 1E-8) {
     
-    // Reuse site indices across batch for efficiency
     Qubit tensor_sites = Qubit(no_sites);
     std::vector<std::vector<std::vector<T1>>> batch_results;
     batch_results.reserve(batch_circuits.size());
@@ -716,66 +723,66 @@ std::vector<std::vector<std::vector<T1>>> circuit_xyz_exp_batch(
     return batch_results;
 }
 
-// PyBind11 module definition with all functions
+// PyBind11 module
 PYBIND11_MODULE(helloitensor, m) {
-    m.doc() = "ITensor quantum feature encoding for fraud detection with LightGBM - Production Ready";
+    m.doc() = "ITensor quantum feature encoding for fraud detection - Production Ready v2.0";
     
     // Original functions (backward compatible)
-    m.def("add", &add<int>, "A function that adds two numbers");
-    m.def("add", &add<float>, "A function that adds two floats");
+    m.def("add", &add<int>, "Add two integers");
+    m.def("add", &add<float>, "Add two floats");
     m.def("hello", &hello, "Hello function");
-    m.def("vec_return", &list_return<int>, "Return input list as a vector");
+    m.def("vec_return", &list_return<int>, "Return input list as vector");
     m.def("tuple_return", &tuple_return<int>, "Print vector of tuples (int)");
     m.def("tuple_return", &tuple_return<float>, "Print vector of tuples (float)");
-    m.def("tuple_return", &tuple_return<double>, "Return vector of tuples (double)");
+    m.def("tuple_return", &tuple_return<double>, "Print vector of tuples (double)");
     
     // Original feature extraction (backward compatible)
     m.def("circuit_xyz_exp", &circuit_xyz_exp<double, float>, 
-          "Extract single qubit XYZ expectation values. Returns list of num_qubit x 3 values.");
+          "Extract XYZ expectation values. Returns num_qubit x 3.");
     
-    // NEW: Enhanced feature extraction
+    // Enhanced features
     m.def("circuit_xyz_exp_enhanced", &circuit_xyz_exp_enhanced<double, float>, 
-          "Enhanced feature extraction with XYZ + entanglement metrics. Returns num_qubit x 4 values.",
+          "Enhanced XYZ + entanglement. Returns num_qubit x 4.",
           pybind11::arg("tensor_vec"), 
           pybind11::arg("no_sites"), 
           pybind11::arg("cutoff") = 1E-8);
     
-    // NEW: Correlation features
+    // Correlation features - ALL FIXED
     m.def("circuit_correlations", &circuit_correlations<double, float>, 
-          "Extract ZZ correlation features between adjacent qubits. Returns (num_qubit-1) values.",
+          "Adjacent ZZ correlations. Returns (num_qubit-1) values.",
           pybind11::arg("tensor_vec"), 
           pybind11::arg("no_sites"), 
           pybind11::arg("cutoff") = 1E-8);
     
-    // NEW: Skip-level correlations
     m.def("circuit_skip_correlations", &circuit_skip_correlations<double, float>, 
-          "Extract ZZ correlations between qubits at skip_distance apart.",
+          "Skip-level ZZ correlations.",
           pybind11::arg("tensor_vec"), 
           pybind11::arg("no_sites"),
           pybind11::arg("skip_distance") = 2,
           pybind11::arg("cutoff") = 1E-8);
     
     m.def("circuit_multiscale_correlations", &circuit_multiscale_correlations<double, float>, 
-          "Extract correlations at multiple skip distances. Returns list of correlation lists.",
+          "Multi-scale correlations at multiple distances.",
           pybind11::arg("tensor_vec"), 
           pybind11::arg("no_sites"),
           pybind11::arg("skip_distances"),
           pybind11::arg("cutoff") = 1E-8);
     
     m.def("circuit_xyz_correlations", &circuit_xyz_correlations<double, float>, 
-          "Extract XX, YY, ZZ correlations at specified skip distance.",
+          "XX, YY, ZZ correlations.",
           pybind11::arg("tensor_vec"), 
           pybind11::arg("no_sites"),
           pybind11::arg("skip_distance") = 1,
           pybind11::arg("cutoff") = 1E-8);
     
-    // NEW: Batch processing
+    // Batch processing
     m.def("circuit_xyz_exp_batch", &circuit_xyz_exp_batch<double, float>, 
-          "Batch processing for multiple circuits. Returns batch_size x num_qubit x 3 values.",
+          "Batch process multiple circuits.",
           pybind11::arg("batch_circuits"), 
           pybind11::arg("no_sites"), 
           pybind11::arg("cutoff") = 1E-8);
 }
+
 
 import sys
 import json
