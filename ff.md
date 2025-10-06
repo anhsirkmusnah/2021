@@ -1290,18 +1290,42 @@ import time
 import numpy as np
 import pickle
 import json
-from mpi4py import MPI
-from projected_quantum_features import ProjectedQuantumFeatures, build_qf_matrix
 from sklearn.preprocessing import StandardScaler
 
-# MPI setup
-mpi_comm = MPI.COMM_WORLD
-rank = mpi_comm.Get_rank()
-size = mpi_comm.Get_size()
-root = 0
+# NEW: Lazy MPI initialization - only import when needed
+_mpi_comm = None
+_rank = None
+_size = None
+_root = 0
 
-# Global timer
-start_time = time.time()
+def _init_mpi():
+    """Initialize MPI only when needed"""
+    global _mpi_comm, _rank, _size
+    if _mpi_comm is None:
+        from mpi4py import MPI
+        _mpi_comm = MPI.COMM_WORLD
+        _rank = _mpi_comm.Get_rank()
+        _size = _mpi_comm.Get_size()
+    return _mpi_comm, _rank, _size
+
+def get_mpi_comm():
+    """Get MPI communicator (initializes if needed)"""
+    mpi_comm, _, _ = _init_mpi()
+    return mpi_comm
+
+def get_rank():
+    """Get MPI rank (initializes if needed)"""
+    _, rank, _ = _init_mpi()
+    return rank
+
+def get_size():
+    """Get MPI size (initializes if needed)"""
+    _, _, size = _init_mpi()
+    return size
+
+
+# Import after defining MPI helpers
+from projected_quantum_features import ProjectedQuantumFeatures, build_qf_matrix
 
 
 def entanglement_graph(nq, nn):
@@ -1316,14 +1340,12 @@ def entanglement_graph(nq, nn):
         A list of pairs of qubits that should have a Rxx acting between them.
     """
     map = []
-    for d in range(1, nn+1):  # For all distances from 1 to nn
-        busy = set()  # Collect the right qubits of pairs on the first layer for this distance
-        # Apply each gate between qubit i and its id (i + d % nq). Do it in two layers.
+    for d in range(1, nn+1):
+        busy = set()
         for i in range(nq):
-            if i not in busy and i+d < nq:  # All of these gates can be applied in one layer
+            if i not in busy and i+d < nq:
                 map.append((i, i+d))
                 busy.add(i+d)
-        # Apply the other half of the gates on distance d; those whose left qubit is in `busy`
         for i in busy:
             if i+d < nq:
                 map.append((i, i+d))
@@ -1343,9 +1365,10 @@ def create_ansatz(num_features, reps, gamma, svd_cutoff=1e-5):
     Returns:
         ProjectedQuantumFeatures instance with enhanced configuration
     """
+    rank = get_rank()
     entanglement_map = entanglement_graph(num_features, 1)
     
-    if rank == root:
+    if rank == _root:
         print(f"\n{'='*60}")
         print(f"ANSATZ CONFIGURATION")
         print(f"{'='*60}")
@@ -1363,7 +1386,7 @@ def create_ansatz(num_features, reps, gamma, svd_cutoff=1e-5):
         ansatz='hamiltonian',
         entanglement_map=entanglement_map,
         hadamard_init=True,
-        svd_cutoff=svd_cutoff  # NEW: Configurable cutoff
+        svd_cutoff=svd_cutoff
     )
     return ansatz
 
@@ -1380,17 +1403,18 @@ def apply_scaling(classical_features, train_flag, scaler_path='./model/scaler.pk
     Returns:
         Scaled feature array
     """
+    rank = get_rank()
+    
     if train_flag:
         scaler = StandardScaler()
         scaled_features = scaler.fit_transform(classical_features)
         
-        # Save scaler with error handling
         import os
         os.makedirs(os.path.dirname(scaler_path), exist_ok=True)
         with open(scaler_path, 'wb') as f:
             pickle.dump(scaler, f)
         
-        if rank == root:
+        if rank == _root:
             print(f"[INFO] Scaler fitted and saved to {scaler_path}")
             print(f"[INFO] Feature mean: {scaler.mean_[:5]}...")
             print(f"[INFO] Feature std: {scaler.scale_[:5]}...")
@@ -1402,7 +1426,7 @@ def apply_scaling(classical_features, train_flag, scaler_path='./model/scaler.pk
                 scaler = pickle.load(f)
             scaled_features = scaler.transform(classical_features)
             
-            if rank == root:
+            if rank == _root:
                 print(f"[INFO] Scaler loaded from {scaler_path}")
             
             return scaled_features
@@ -1428,7 +1452,6 @@ def save_array(array, filename, output_dir='./pqf_arr'):
     filepath = f'{output_dir}/{filename}.npy'
     np.save(filepath, array)
     
-    # Save metadata
     metadata = {
         'shape': array.shape,
         'dtype': str(array.dtype),
@@ -1452,25 +1475,27 @@ def generate_projectedQfeatures(
     data_feature, 
     reps, 
     gamma, 
-    target_label, 
-    info, 
+    target_label=None,  # Made optional with default
+    info='quantum_features', 
     slice_size=50000, 
     train_flag=False,
-    # NEW: Enhanced feature extraction parameters
     svd_cutoff=1e-5,
     use_enhanced_features=True,
     include_correlations=True,
     correlation_config=None,
-    use_batch_processing=False
+    use_batch_processing=False,
+    mpi_comm=None  # NEW: Allow external MPI comm or use internal
 ):
     """
     Generate projected quantum features with enhanced capabilities for fraud detection.
+    
+    This function can be imported and used as a library function.
     
     Args:
         data_feature: Input classical features (numpy array or pandas DataFrame)
         reps: Number of circuit repetitions
         gamma: Gamma hyperparameter for ansatz
-        target_label: Target label column (not used in feature generation but for metadata)
+        target_label: Target label column (optional, not used in feature generation)
         info: String identifier for output file naming
         slice_size: Number of samples to process per batch (default: 50000)
         train_flag: Whether to fit and save scaler (True for training data)
@@ -1478,12 +1503,20 @@ def generate_projectedQfeatures(
         use_enhanced_features: Extract XYZ + entanglement features (default: True)
         include_correlations: Include correlation features (default: True)
         correlation_config: Configuration dict for correlation extraction
-        use_batch_processing: Use batch ITensor processing (default: False, enable for large datasets)
+        use_batch_processing: Use batch ITensor processing (default: False)
+        mpi_comm: MPI communicator (if None, uses internal MPI initialization)
     
     Returns:
         Combined classical + quantum feature array (or None if non-root process)
     """
-    if rank == root:
+    # Use provided MPI comm or initialize internal one
+    if mpi_comm is None:
+        mpi_comm = get_mpi_comm()
+    
+    rank = get_rank()
+    start_time = time.time()
+    
+    if rank == _root:
         print(f"\n{'='*70}")
         print(f"QUANTUM FEATURE GENERATION - FRAUD DETECTION OPTIMIZED")
         print(f"{'='*70}")
@@ -1502,7 +1535,7 @@ def generate_projectedQfeatures(
     data_size = data_feature.shape[0]
     classical_features = np.array(data_feature)
     
-    if rank == root:
+    if rank == _root:
         print(f"[INFO] Input data shape: {classical_features.shape}")
         print(f"[INFO] Number of features: {num_features}")
         print(f"[INFO] Number of samples: {data_size}")
@@ -1516,11 +1549,11 @@ def generate_projectedQfeatures(
     # Default correlation configuration for fraud detection
     if correlation_config is None:
         correlation_config = {
-            'type': 'multiscale',  # Best for fraud detection
-            'skip_distances': [1, 2, 3]  # Captures local and long-range patterns
+            'type': 'multiscale',
+            'skip_distances': [1, 2, 3]
         }
     
-    if rank == root:
+    if rank == _root:
         print(f"\n[INFO] Starting quantum feature extraction...")
         print(f"[INFO] Processing {data_size} samples in slices of {slice_size}")
     
@@ -1532,7 +1565,6 @@ def generate_projectedQfeatures(
     for i in range(num_slices):
         slice_start = i * slice_size
         
-        # Determine slice bounds
         if i == num_slices - 1 and data_size % slice_size != 0:
             slice_end = slice_start + (data_size % slice_size)
         else:
@@ -1540,7 +1572,7 @@ def generate_projectedQfeatures(
         
         classical_features_split = classical_features[slice_start:slice_end]
         
-        if rank == root:
+        if rank == _root:
             print(f"\n{'='*60}")
             print(f"Processing Slice {i+1}/{num_slices}")
             print(f"{'='*60}")
@@ -1559,7 +1591,7 @@ def generate_projectedQfeatures(
             use_batch_processing=use_batch_processing
         )
         
-        if rank == root:
+        if rank == _root:
             slice_duration = time.time() - slice_timer
             print(f"\n[TIMING] Slice processing time: {slice_duration:.2f} seconds")
             print(f"[INFO] Quantum feature slice shape: {quantum_features_split.shape}")
@@ -1582,7 +1614,7 @@ def generate_projectedQfeatures(
             combined_feature_list.append(combined_features_split)
     
     # Aggregate all slices
-    if rank == root:
+    if rank == _root:
         print(f"\n{'='*60}")
         print(f"AGGREGATING ALL SLICES")
         print(f"{'='*60}")
@@ -1611,13 +1643,11 @@ def generate_projectedQfeatures(
         print(f"[TIMING] Average time per sample: {total_duration/data_size:.4f} seconds")
         print(f"{'='*60}\n")
         
-        # Return final features for production use
         return final_features
     
-    return None  # Non-root processes return None
+    return None
 
 
-# NEW: Convenience wrapper for fraud detection use case
 def generate_fraud_detection_features(
     X_train, 
     X_test=None,
@@ -1629,6 +1659,7 @@ def generate_fraud_detection_features(
 ):
     """
     Simplified interface for fraud detection feature generation.
+    Can be imported and used as a library function.
     
     Args:
         X_train: Training feature array
@@ -1642,7 +1673,9 @@ def generate_fraud_detection_features(
     Returns:
         Tuple of (train_features, test_features) if X_test provided, else train_features only
     """
-    if rank == root:
+    rank = get_rank()
+    
+    if rank == _root:
         print(f"\n{'#'*70}")
         print(f"# FRAUD DETECTION QUANTUM FEATURE PIPELINE")
         print(f"{'#'*70}\n")
@@ -1655,7 +1688,7 @@ def generate_fraud_detection_features(
         target_label=None,
         info=f'{output_prefix}_train',
         slice_size=slice_size,
-        train_flag=True,  # Fit and save scaler
+        train_flag=True,
         svd_cutoff=svd_cutoff,
         use_enhanced_features=True,
         include_correlations=True,
@@ -1672,7 +1705,7 @@ def generate_fraud_detection_features(
             target_label=None,
             info=f'{output_prefix}_test',
             slice_size=slice_size,
-            train_flag=False,  # Load existing scaler
+            train_flag=False,
             svd_cutoff=svd_cutoff,
             use_enhanced_features=True,
             include_correlations=True,
@@ -1684,24 +1717,25 @@ def generate_fraud_detection_features(
     return train_features
 
 
-# Example usage
+# Example usage when run as script
 if __name__ == "__main__":
-    """
-    Example usage for fraud detection pipeline
-    """
-    if rank == root:
+    rank = get_rank()
+    
+    if rank == _root:
         print("\n" + "="*70)
         print("QUANTUM FRAUD DETECTION - PRODUCTION READY")
         print("="*70)
         print("\nUsage:")
         print("  mpirun -np 4 python generate_pqf.py")
-        print("\nFor production use, call generate_fraud_detection_features()")
-        print("  with your fraud detection dataset.")
+        print("\nFor library import in another script:")
+        print("  from generate_pqf import generate_projectedQfeatures")
+        print("  from generate_pqf import generate_fraud_detection_features")
         print("\nExample:")
-        print("  train_qf, test_qf = generate_fraud_detection_features(")
-        print("      X_train=train_data,")
-        print("      X_test=test_data,")
-        print("      svd_cutoff=1e-5,")
-        print("      output_prefix='credit_card_fraud'")
+        print("  train_qf = generate_projectedQfeatures(")
+        print("      data_feature=X_train,")
+        print("      reps=2,")
+        print("      gamma=0.5,")
+        print("      info='my_fraud_model',")
+        print("      svd_cutoff=1e-5")
         print("  )")
         print("="*70 + "\n")
