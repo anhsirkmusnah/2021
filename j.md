@@ -1,91 +1,117 @@
-```markdown
-# Quantum‑Inspired Fraud Detection Pipeline on GCP
+svd_cutoff — float (≥0)
 
-## 📌 1. Overview
+Meaning: Threshold below which singular values are discarded in SVD truncations (used in MPS / MPO / tensor compressions).
 
-This report presents a **holistic architecture**, **service mapping**, **data flow**, and **daily cost estimate** for a production-ready Quantum‑Inspired Fraud Detection pipeline on Google Cloud Platform (GCP). The solution leverages:
+Effect: Controls numerical compression: smaller svd_cutoff → keep more singular values → more accurate but heavier memory & compute; larger → more truncation (lossy) but faster. Important when contracting or compressing tensor networks. 
+link.aps.org
 
-- **Quantum-inspired feature encoding** via tensor networks (MPS/MPO) using **ITensor** and **OpenMPI**
-- **LightGBM** for model training and inference
-- **Real-time streaming ingestion** with sub-100ms latency
-- **HPC-aware compute** on GKE with MPI
-- **Full MLOps lifecycle**: CI/CD, monitoring, versioning, and automated retraining
+Typical tuning: log-uniform sample in [1e-12, 1e-2]. Good starting default 1e-6.
 
+Search strategy: log-uniform (because scale spans many orders).
 
-## 🗺️ 2. Architecture Components
+max_dim (a.k.a. max bond dimension, χ) — int
 
-| Layer              | GCP Services                                           | Purpose                                                                         |
-|--------------------|--------------------------------------------------------|---------------------------------------------------------------------------------|
-| **Ingestion**      | Pub/Sub, Dataflow (Apache Beam)                        | Real-time event streaming, cleansing, and transformation                        |
-| **Storage**        | Cloud Storage (GCS), BigQuery (optional)               | Raw & batch data persistence; analytical warehousing                            |
-| **Feature Store**  | Vertex AI Feature Store (online + offline), Redis      | Centralized storage for precomputed features, low-latency retrieval             |
-| **Encoding**       | GKE (C2/H3 VMs), KubeMPI, Argo Workflows, Filestore    | Distributed MPS/MPO tensor encoding with topology-aware scheduling              |
-| **Training**       | Vertex AI Custom Jobs, Experiments, Model Registry     | Distributed LightGBM training; experiment tracking and model versioning         |
-| **Validation**     | Vertex AI Pipelines, Model Monitoring, Cloud Build     | Automated evaluation, drift detection, and promotion pipelines                 |
-| **Serving**        | Vertex AI Endpoints or Cloud Run, Cloud Functions      | Low-latency (<100ms) inference; scalable serverless or managed endpoints        |
-| **CI/CD & DevOps** | Cloud Source Repos, Cloud Build, Deploy, Artifact Reg. | Infrastructure-as-Code, build-test-deploy pipelines                              |
-| **Monitoring**     | Cloud Logging, Cloud Monitoring, Alerting, PagerDuty   | End-to-end observability: system, pipeline, and model metrics                   |
-| **Security**       | IAM, VPC Service Controls, CMEK, Binary Authorization  | Fine-grained access, perimeter protection, encryption, and container trust     |
+Meaning: Upper limit on the bond dimension / Schmidt rank kept in tensor network (MPS) or limit on internal tensor sizes.
 
+Effect: Governs representational capacity (how much entanglement you can capture). Larger = more expressive but cost ~ O(χ^3) or worse depending on ops. If too small, you underfit / miss correlations. 
+link.aps.org
 
-## 🔄 3. End‑to‑End Data Flow
+Typical tuning: choose from powers of two or small set: [8,16,32,64,128,256]. If GPU/memory limited, cap accordingly.
 
-1. **Event Ingestion**: Transactional data published to **Pub/Sub**.
-2. **Streaming ETL**: **Dataflow** jobs consume Pub/Sub, perform cleansing/validation, write raw to **GCS** and preprocessed streams.
-3. **Batch Encoding**: Scheduled Argo Workflow triggers MPS/MPO encoding on **GKE** (MPI pods), pulling cleansed data from GCS, storing tensor features back to GCS and **Vertex Feature Store**.
-4. **Feature Storage**: Offline features land in Vertex AI Feature Store (offline), online view updated for immediate inference.
-5. **Model Training**: Vertex AI Custom Job reads offline features, trains **LightGBM**, logs metrics in Experiments, registers best model in Model Registry.
-6. **Validation & Promotion**: Vertex Pipeline validates accuracy, drift checks via Model Monitoring; on success, Cloud Build triggers deployment job.
-7. **Deployment**: Cloud Deploy pushes container or Vertex AI Endpoint update; traffic shifted via canary or blue/green.
-8. **Real‑Time Inference**: Frontend (API) calls **Vertex Endpoint** or **Cloud Run**, retrieves online features from Feature Store or **Redis** cache, returns fraud score.
-9. **Monitoring & Alerts**: Logs and metrics collected in Cloud Logging & Monitoring; model drift triggers alerts to Slack or PagerDuty; retraining pipeline can be invoked automatically.
+Search strategy: categorical over candidate values or log-uniform integer (but prefer categorical/powers-of-two).
 
+reps — int (repetitions / layers)
 
-## 💸 4. Daily Cost Estimate
+Meaning: Number of repeated blocks / layers in the ansatz (either tensor network sweeps or repeated parameterized circuit layers).
 
-| Component                         | Usage                               | Est. Cost / day (USD) |
-|-----------------------------------|-------------------------------------|-----------------------|
-| **Encoding Compute (GKE)**        | 5 × 16vCPU, 64GB nodes, 24h         | $500                  |
-| **Model Training**                | LightGBM on 16vCPU × 4h             | $1                    |
-| **Storage (GCS)**                 | 5 TB/day                            | $4.33                 |
-| **Pub/Sub Ingestion**             | 5 M messages/day                    | $8                    |
-| **Dataflow ETL**                  | 6 × n1‑standard workers × 24h       | $75                   |
-| **Feature Store & Redis**         | 100 GB + 1 GB cache                 | $0.30                 |
-| **Serving (Vertex/Cloud Run)**    | Provisioned concurrency & CPU       | $35                   |
-| **Monitoring & Logging**          | Logs, metrics, alerts               | $10                   |
-| **Total Estimated Daily Cost**    |                                     | **≈ $633/day**        |
+Effect: More reps → higher capacity (but deeper circuits → harder to train and noisier on hardware). Tradeoff: performance vs trainability / overfitting. 
+arXiv
 
-> **Note**: Costs assume on-demand pricing. Utilizing **spot VMs**, **committed use discounts**, or **autoscaling** can lower expenses.
+Typical tuning: integer uniform 1..8 (start 1–4).
 
+Search strategy: discrete uniform.
 
-## ⚡ 5. HPC‑Specific Optimizations
+gamma — float (interpretation depends on context — two common meanings)
 
-- **Spot / Preemptible VMs** for non-critical encoding jobs (60–80% savings)
-- **Placement policies** and **pod affinity** to reduce network latency
-- **Multi-threaded ITensor** with optimized BLAS (OpenBLAS/MKL)
-- **Filestore High Scale** for shared filesystem with high IOPS
+Meaning (A — circuit parameter): a rotation / entangling gate angle in parameterized quantum circuits; natural range [-π, π] or [0, π].
 
+Meaning (B — penalty / regularizer / annealing rate): penalty weight (e.g., for constraints or loss term) or annealing rate scalar. Positive real — often spans many orders.
 
-## 🔐 6. Security & Compliance
+Effect:
 
-- **IAM**: Least-privilege roles for each microservice
-- **VPC Service Controls**: Prevent data exfiltration across projects
-- **CMEK**: Customer-managed encryption keys for GCS, Pub/Sub
-- **Binary Authorization**: Enforce signed container images in GKE
-- **Audit Logging**: Enable Cloud Audit Logs across services
+If angle, influences expressivity and search landscape (periodic behavior). Sample from [0, π] or [-π, π].
 
+If penalty/scale, it balances constraint enforcement (too high → dominates objective; too low → constraint violations).
 
-## 📈 7. Optional Add‑ons
+Typical tuning:
 
-- **Terraform modules** with example templates for each layer
-- **GCP architecture diagrams** (e.g., using Terraform Cloud Architect icons)
-- **Latency benchmarking scripts** using `wrk` or Fortio
-- **Explainable AI**: Integrate SHAP/LIME for transparency in LightGBM outputs
-- **Cost optimization study**: Detailed breakdown by commitment tiers
+angle: uniform [0, π] (or [-π,π]).
 
+penalty/scale: log-uniform in [1e-4, 1e2]. Default often around 1e-2 .. 1e1 depending on problem scaling.
 
----
+Search strategy: conditional on gamma_type (angle vs penalty vs lr).
 
-*Prepared by: [Your Name]*
-*Date: July 25, 2025*
-```
+entanglement_pattern / nearest_neighbor_for_non_skip_entanglement — categorical
+
+Meaning: Which qubit/tensor connectivity to use when applying entangling gates / link tensors. E.g. nearest_neighbor vs skip vs all_to_all. (Your “nearest neighbour for non-skip entanglement” implies: when you are not using skip entanglement, use NN.) 
+pennylane.ai
++1
+
+Effect: Determines reachable correlations and trainability. NN is shallow and hardware-friendly; skip distances or long-range increase entanglement but may increase depth / swaps / noise. 
+IBM
+
+Typical options: ['nearest_neighbor', 'skip', 'all_to_all'].
+
+Search strategy: categorical.
+
+skip_level — boolean
+
+Meaning: If true, add skip-distance entangling connections (i ↔ i+skip) in ansatz / entanglement pattern; if false, only the base pattern (usually NN) is used.
+
+Effect: Enables long-range entanglement with minimal extra layers if used carefully. Must be paired with skip_distances. 
+IBM
+
+Search strategy: categorical [True, False]; conditional sampling for skip_distances when True.
+
+skip_distances — array / categorical of ints (allowed values: [1,2,3,4])
+
+Meaning: Which distances to use for skip entanglers (distance=1 is NN, 2 is next-nearest, etc.).
+
+Effect: Multiple distances allow capturing correlations at multiple scales; combining them increases gates/depth.
+
+Typical options: try single values (1,2,3,4) or small combos like [1,2], [1,3], or full [1,2,3,4].
+
+Search strategy: if tuning combinatorially, prefer categorical choices over a curated set (e.g., ['[1]','[2]','[1,2]','[1,2,3]','[1,2,3,4]']) instead of exploring full powerset.
+
+multi_distance — categorical (your provided semantics)
+
+Meaning: Overall mode controlling entanglement composition:
+
+just_nn — use only nearest-neighbour;
+
+just_skip_level — use only skip entanglement distances (from skip_distances);
+
+all_values_defined — combine NN and skip distances.
+
+Effect: shorthand that controls how the code constructs entanglers.
+
+Search strategy: categorical with the three options.
+
+boev. (embedding/solver-related)* — grouped object with recommended tunables:
+
+boev.use_boev_transform — bool — whether to use the Boev embedding (True/False). Default True. 
+Frontiers
+
+boev.lambda — float (Lagrange multiplier / penalty weight) — log-uniform [1e-4, 1e2]. Boev uses Lagrange multipliers to reduce hyperparameters; tune to control constraint strictness. 
+Frontiers
+
+boev.simcim_iters — int — SimCIM iterations / steps; e.g., [100, 5000]. 
+arXiv
+
+boev.simcim_noise — float — amplitude of stochastic noise in SimCIM dynamics — log-uniform [1e-6, 1e-1]. 
+arXiv
+
+boev.simcim_schedule — categorical/object — annealing/gain schedule (e.g., linear, exponential) — choose from ['linear', 'exponential', 'custom']. 
+arXiv
+
+boev.seed — int — RNG seed for reproducibility.
