@@ -115,3 +115,13 @@ boev.simcim_schedule — categorical/object — annealing/gain schedule (e.g., l
 arXiv
 
 boev.seed — int — RNG seed for reproducibility.
+
+Feature Type	Suggested Gate	Why
+Continuous numerical	RX (primary), RY (secondary)	Controls amplitude → predictive
+Binary 0/1	RX(π·x) or RZ	Boolean-like rotation
+Ordinal	RZ or RX	Ordered → phase or amplitude
+Categorical (small cardinality)	RZ	Smooth mapping of class index
+High-cardinality categorical	Amplitude encoding or embedding + RZ/RX	Dimensionality reduction
+Periodic time features	RZ	Natural phase behavior
+Velocity / deltas	RY	Good for directional behaviour
+Normalised engineered score	RX	Probability-aligned
