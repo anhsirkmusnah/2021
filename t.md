@@ -1,1196 +1,1679 @@
-# Quantum-Inspired Machine Learning (QiML) Platform
-## Projected Quantum Kernels for Financial Fraud Detection
-### Complete Technical Documentation
+h1. Quantum-Inspired Machine Learning (QiML) Platform
+h2. Projected Quantum Kernels for Financial Fraud Detection - Complete Technical Documentation
 
----
+{toc:printable=true|style=square|maxLevel=3|indent=20px|minLevel=1|class=bigpink|exclude=[1]}
 
-**Document Version:** 1.0
-**Last Updated:** January 2026
-**Authors:** Enterprise Quantum Engineering Team
-**Classification:** Internal Technical Documentation
+----
 
----
+h1. 1. Executive Summary
 
-# Table of Contents
+h2. 1.1 What is This Project?
 
-1. [Executive Summary](#1-executive-summary)
-2. [Project Overview](#2-project-overview)
-3. [Theoretical Foundations](#3-theoretical-foundations)
-4. [Projected Quantum Kernels](#4-projected-quantum-kernels)
-5. [Tensor Network Simulation](#5-tensor-network-simulation)
-6. [QMLOps Pipeline](#6-qmlops-pipeline)
-7. [Implementation Reference](#7-implementation-reference)
-8. [Fraud Detection Application](#8-fraud-detection-application)
-9. [Deployment Guide](#9-deployment-guide)
-10. [References](#10-references)
+This platform implements *Quantum-Inspired Machine Learning (QiML)* for binary classification, specifically designed for *financial fraud detection*.
 
----
+*For ML practitioners:* Think of this as a sophisticated feature engineering pipeline that:
+# Takes your classical tabular data (like transaction features)
+# Passes it through a "quantum circuit" simulation
+# Extracts new features that capture complex non-linear relationships
+# Uses these features in a kernel-based SVM classifier
 
-# 1. Executive Summary
+*The key insight:* We're not running on actual quantum hardware. Instead, we simulate quantum circuits on classical computers using efficient tensor network methods. This gives us the mathematical benefits of quantum feature spaces without needing quantum hardware.
 
-## 1.1 Purpose
+h2. 1.2 Why Quantum-Inspired ML?
 
-This document provides comprehensive technical documentation for the Quantum-Inspired Machine Learning (QiML) platform, which implements **Projected Quantum Kernels (PQK)** for binary classification tasks, with primary application to **financial fraud detection**.
+{panel:title=The Core Problem|borderStyle=solid|borderColor=#ccc|titleBGColor=#f0f0f0}
+In fraud detection, we often have:
+* High-dimensional data with complex feature interactions
+* Non-linear decision boundaries that simple models miss
+* Need for robust models that don't overfit
 
-## 1.2 Key Capabilities
+Traditional approaches like RBF kernels work well, but quantum-inspired kernels can capture *different types of non-linear relationships* through quantum mechanical principles.
+{panel}
 
-| Capability | Description |
-|------------|-------------|
-| **Quantum Feature Extraction** | Encodes classical data into quantum circuits and extracts Pauli expectation values |
-| **Projected Quantum Kernels** | Computes kernel matrices using quantum-derived features for SVM classification |
-| **Tensor Network Simulation** | Uses Matrix Product States (MPS) via ITensor for efficient classical simulation |
-| **MPI Parallelization** | Distributed computation across multiple nodes for scalable kernel construction |
-| **Production Pipeline** | End-to-end workflow from data ingestion to model deployment |
+h2. 1.3 Key Results
 
-## 1.3 Technology Stack
+||Metric||PQK-SVM (Our Method)||RBF-SVM (Baseline)||Improvement||
+|Accuracy|85-92%|82-88%|+3-4%|
+|Recall (Fraud Detection)|82-90%|78-86%|+4-5%|
+|F1 Score|81-89%|77-85%|+4-5%|
+|AUC-ROC|88-94%|84-90%|+4%|
 
-| Layer | Technology |
-|-------|------------|
-| Quantum Simulation | ITensor C++ library with custom qubit site type |
-| Circuit Construction | pytket (Quantinuum) |
-| Parallelization | MPI (mpi4py, OpenMPI) |
-| ML Framework | scikit-learn (SVM), LightGBM |
-| Language Bridge | pybind11 (C++/Python) |
-| Containerization | Docker |
+----
 
-## 1.4 Primary Use Case
+h1. 2. Understanding Quantum Computing Basics (For ML Practitioners)
 
-**Financial Fraud Detection** using the Elliptic Bitcoin dataset, demonstrating:
-- 85-92% accuracy on fraud classification
-- 5-10% improvement over classical RBF kernels
-- Sub-200ms inference latency per transaction
+{note:title=Why This Section Matters}
+Before diving into the implementation, you need to understand the quantum concepts we're borrowing. Don't worry - we'll explain everything using analogies to concepts you already know from ML.
+{note}
 
----
+h2. 2.1 What is a Qubit? (The Quantum Version of a Bit)
 
-# 2. Project Overview
+h3. 2.1.1 Classical Bits vs Qubits
 
-## 2.1 Architecture Diagram
+*Classical bit:* Can be either 0 or 1. That's it.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           QiML PLATFORM ARCHITECTURE                        │
-└─────────────────────────────────────────────────────────────────────────────┘
+*Qubit:* Can be in a "superposition" - a combination of 0 and 1 simultaneously.
 
-                         ┌─────────────────────────────┐
-                         │      Classical Data         │
-                         │    x ∈ ℝᵈ (d features)     │
-                         └─────────────┬───────────────┘
-                                       │
-                         ┌─────────────▼───────────────┐
-                         │    Quantum Feature Map      │
-                         │  U(x) = H⊗ⁿ ∏[Rz·XXPhase]  │
-                         │      (pytket circuits)      │
-                         └─────────────┬───────────────┘
-                                       │
-                         ┌─────────────▼───────────────┐
-                         │   MPS Tensor Network Sim    │
-                         │    |ψ(x)⟩ = U(x)|0⟩ⁿ       │
-                         │    (ITensor C++ backend)    │
-                         └─────────────┬───────────────┘
-                                       │
-                         ┌─────────────▼───────────────┐
-                         │   Projected Quantum Features│
-                         │   Φ(x) = [⟨X⟩,⟨Y⟩,⟨Z⟩]ᵢ   │
-                         │      (3n dimensions)        │
-                         └─────────────┬───────────────┘
-                                       │
-                     ┌─────────────────┴─────────────────┐
-                     │                                   │
-         ┌───────────▼───────────┐         ┌───────────▼───────────┐
-         │    Kernel Mode        │         │    Feature Mode       │
-         │  k(x,x') = exp(-α·D)  │         │  Φ(x) → LightGBM     │
-         │     → SVM             │         │                       │
-         └───────────────────────┘         └───────────────────────┘
-```
+{code:title=Mathematical Representation}
+Classical bit: b ∈ {0, 1}
 
-## 2.2 Directory Structure
+Qubit state: |ψ⟩ = α|0⟩ + β|1⟩
 
-```
-QML dataproc/
-├── ITensor_C/                    # ITensor C++ backend
-│   ├── helloitensor.cc          # C++ MPS simulation core
-│   ├── qubit.h                  # Custom ITensor qubit site type
-│   ├── main.py                  # Main execution script
-│   ├── main_dlp.py              # Discrete log problem variant
-│   ├── projected_kernel_ansatz.py  # Ansatz + kernel builder
-│   └── datasets/                # Data directory
-│
-├── QuantumLibs/                  # Python quantum simulation
-│   ├── main.py                  # Execution entry point
-│   ├── projected_kernel_ansatz.py
-│   └── projected_quantum_features.py
-│
-├── dataproc files/               # Production pipeline
-│   ├── main.py                  # Orchestration script
-│   ├── generate_pqf.py          # Feature generation
-│   ├── train.py                 # Model training
-│   └── test.py                  # Model evaluation
-│
-├── Installation-Script/          # Deployment utilities
-│   ├── Dockerfile               # Container definition
-│   ├── elliptic_preproc.py      # Data preprocessing
-│   └── readme.md                # Installation guide
-│
-└── docs/                         # Documentation
-```
+where:
+- |0⟩ and |1⟩ are the "basis states" (like unit vectors)
+- α and β are complex numbers
+- |α|² + |β|² = 1 (normalization constraint)
+- |α|² = probability of measuring 0
+- |β|² = probability of measuring 1
+{code}
 
-## 2.3 Data Flow Summary
+*ML Analogy:* Think of a qubit like a probability distribution over {0, 1}, but with complex-valued "amplitudes" instead of just probabilities. The complex numbers allow for interference effects that create interesting mathematical properties.
 
-```
-Raw Data (CSV)
-     │
-     ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│ PREPROCESSING: QuantileTransform → StandardScaler → MinMaxScaler[-π,π]    │
-└────────────────────────────────────────────────────────────────────────────┘
-     │
-     ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│ QUANTUM ENCODING: Build circuit U(x) with Hadamard + Rz + XXPhase gates   │
-└────────────────────────────────────────────────────────────────────────────┘
-     │
-     ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│ MPS SIMULATION: Simulate |ψ(x)⟩ = U(x)|0⟩ⁿ using ITensor                  │
-└────────────────────────────────────────────────────────────────────────────┘
-     │
-     ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│ FEATURE EXTRACTION: Compute ⟨X⟩, ⟨Y⟩, ⟨Z⟩ for each qubit → Φ(x) ∈ ℝ³ⁿ   │
-└────────────────────────────────────────────────────────────────────────────┘
-     │
-     ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│ KERNEL COMPUTATION: k(x,x') = exp(-α·||Φ(x)-Φ(x')||²)                     │
-└────────────────────────────────────────────────────────────────────────────┘
-     │
-     ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│ CLASSIFICATION: SVM with precomputed kernel → Fraud/Legitimate prediction │
-└────────────────────────────────────────────────────────────────────────────┘
-```
+h3. 2.1.2 The Bloch Sphere (Visualizing a Qubit)
 
----
+Every single-qubit state can be represented as a point on a sphere called the "Bloch sphere":
 
-# 3. Theoretical Foundations
+{code:title=Bloch Sphere Parameterization}
+|ψ⟩ = cos(θ/2)|0⟩ + e^(iφ)·sin(θ/2)|1⟩
 
-## 3.1 Quantum State Representation
+where:
+- θ ∈ [0, π] is the polar angle (how much "1" vs "0")
+- φ ∈ [0, 2π) is the azimuthal angle (the "phase")
 
-### 3.1.1 Single Qubit States
+Key points on the sphere:
+- North pole (θ=0): |0⟩ state
+- South pole (θ=π): |1⟩ state
+- Equator (θ=π/2): Equal superposition of |0⟩ and |1⟩
+{code}
 
-A qubit exists in superposition of computational basis states:
+{panel:title=Why This Matters for ML|borderStyle=solid}
+The Bloch sphere gives us a 3D representation of a qubit. When we measure a qubit, we get three numbers: the X, Y, and Z coordinates on this sphere. These become our quantum features!
 
-**Mathematical Definition:**
-```
-|ψ⟩ = α|0⟩ + β|1⟩
-```
+*This is the core of our approach:* We encode data into qubit states, then extract the (X, Y, Z) coordinates as features.
+{panel}
 
-where α, β ∈ ℂ and |α|² + |β|² = 1.
+h2. 2.2 Multiple Qubits and the Exponential State Space
 
-**Bloch Sphere Representation:**
-```
-|ψ⟩ = cos(θ/2)|0⟩ + e^(iφ)sin(θ/2)|1⟩
-```
+h3. 2.2.1 The Exponential Scaling
 
-where θ ∈ [0, π] and φ ∈ [0, 2π).
+When we have multiple qubits, the state space grows exponentially:
 
-### 3.1.2 Multi-Qubit Systems
+||Number of Qubits||State Space Dimension||Equivalent to...||
+|1|2|2 probabilities|
+|2|4|4 probabilities|
+|10|1,024|Small neural network layer|
+|20|1,048,576|~1 million parameters|
+|30|1,073,741,824|~1 billion parameters|
+|50|1,125,899,906,842,624|More than all atoms on Earth!|
 
-For n qubits, the state space is the tensor product:
+{code:title=Mathematical Representation of n-Qubit State}
+For n qubits, a general state is:
 
-```
-ℋ = ℋ₁ ⊗ ℋ₂ ⊗ ... ⊗ ℋₙ = (ℂ²)^⊗n
-```
-
-A general n-qubit state requires 2ⁿ complex amplitudes:
-
-```
 |ψ⟩ = Σ c_{i₁i₂...iₙ} |i₁i₂...iₙ⟩
-```
 
-| Qubits | Amplitudes | Memory (complex128) |
-|--------|------------|---------------------|
-| 20 | ~1M | 16 MB |
-| 30 | ~1B | 16 GB |
-| 40 | ~1T | 16 TB |
-| 50 | ~1P | 16 PB |
+where:
+- Each iₖ ∈ {0, 1}
+- There are 2ⁿ coefficients c_{i₁i₂...iₙ}
+- All |c|² must sum to 1
+{code}
 
-## 3.2 Quantum Feature Maps
+*ML Analogy:* This is like having a probability distribution over 2ⁿ possible outcomes. The exponential scaling is both the promise and the challenge of quantum computing.
 
-### 3.2.1 Definition
+h3. 2.2.2 Entanglement (Quantum Correlations)
 
-A quantum feature map encodes classical data into quantum states:
+*Entanglement* is a quantum phenomenon where qubits become correlated in ways that cannot be described by classical probability.
 
-```
-φ: 𝒳 → ℋ
-φ(x) = U(x)|0⟩^⊗n
-```
+{code:title=Example: Bell State (Maximally Entangled)}
+|Φ⁺⟩ = (1/√2)(|00⟩ + |11⟩)
 
-where x ∈ 𝒳 ⊆ ℝᵈ is classical input data and U(x) is a parameterized unitary circuit.
+This state means:
+- If you measure qubit 1 and get 0, qubit 2 is DEFINITELY 0
+- If you measure qubit 1 and get 1, qubit 2 is DEFINITELY 1
+- But before measurement, both possibilities exist simultaneously
 
-### 3.2.2 The Hamiltonian Ansatz (Primary Implementation)
+This correlation is STRONGER than any classical correlation can be.
+{code}
 
-**Circuit Structure:**
+*Why This Matters for ML:* Entanglement allows our quantum circuits to create complex feature interactions. When we entangle qubits encoding different data features, we create correlations that capture feature interactions in ways classical methods cannot easily replicate.
 
-```
-Layer Structure (repeated r times):
+h2. 2.3 Quantum Gates (Transformations on Qubits)
 
-1. INITIALIZATION (once): H^⊗n - Hadamard on all qubits
+Just like neural networks apply transformations (weights, activations) to data, quantum circuits apply "gates" to qubits.
 
-   |0⟩ ─[H]─ → |+⟩ = (|0⟩ + |1⟩)/√2
+h3. 2.3.1 Single-Qubit Gates
 
-2. SINGLE-QUBIT ENCODING: Rz(γ·xᵢ/π) on qubit i
+{code:title=Common Single-Qubit Gates}
+HADAMARD GATE (H):
+- Creates superposition from basis state
+- H|0⟩ = (|0⟩ + |1⟩)/√2 = |+⟩
+- H|1⟩ = (|0⟩ - |1⟩)/√2 = |-⟩
 
-   Applies phase rotation based on feature value
+Matrix form:
+H = (1/√2) * | 1   1 |
+             | 1  -1 |
 
-3. TWO-QUBIT ENTANGLEMENT: R_XX(γ²(1-xᵢ)(1-xⱼ)) on pairs (i,j)
-
-   Creates entanglement proportional to feature interaction
-```
-
-**Mathematical Formulation:**
-
-```
-U(x) = H^⊗n ∏_{ℓ=1}^{r} [ ∏_{i=1}^{n} Rz(γxᵢ/π) ∏_{(i,j)∈E} R_XX(γ²(1-xᵢ)(1-xⱼ)) ]
-```
-
-**Gate Definitions:**
-
-```
-         ┌                      ┐
-Rz(θ) =  │ e^(-iθ/2)     0     │
-         │     0      e^(iθ/2)  │
-         └                      ┘
-
-            ┌                                              ┐
-R_XX(θ) =   │ cos(θ/2)    0         0      -i·sin(θ/2)   │
-            │    0     cos(θ/2) -i·sin(θ/2)     0        │
-            │    0    -i·sin(θ/2) cos(θ/2)      0        │
-            │-i·sin(θ/2)   0         0       cos(θ/2)    │
-            └                                              ┘
-```
-
-### 3.2.3 The Magic Ansatz (Alternative)
-
-**Circuit Structure:**
-```
-Layer Structure (repeated r times):
-1. Hadamard H on all qubits
-2. T gate (π/8 rotation) on all qubits
-3. CZ gates on connected pairs
-4. Rz(xᵢ) encoding on qubit i
-```
-
-Creates "magic states" with quantum contextuality properties.
-
-### 3.2.4 Entanglement Topology
-
-**Linear Nearest-Neighbor Connectivity:**
-
-```
-E = {(i, i+1) : i ∈ [0, n-2]}
-
-Example for n=5:
-Qubits:  0 --- 1 --- 2 --- 3 --- 4
-Pairs:   [(0,1), (2,3), (1,2), (3,4)]
-```
-
-**Rationale:**
-- Matches typical quantum hardware constraints
-- Sufficient for capturing local correlations
-- Enables efficient MPS simulation
-
-## 3.3 Kernel Methods in Machine Learning
-
-### 3.3.1 The Kernel Trick
-
-A function k: 𝒳 × 𝒳 → ℝ is a valid kernel if it corresponds to an inner product:
-
-```
-k(x, x') = ⟨φ(x), φ(x')⟩_ℱ
-```
-
-for some feature map φ: 𝒳 → ℱ.
-
-### 3.3.2 Mercer's Theorem
-
-A symmetric function k(x, x') is a valid kernel if and only if it is positive semi-definite:
-
-```
-Σᵢⱼ cᵢcⱼk(xᵢ, xⱼ) ≥ 0
-```
-
-for all finite sets {xᵢ} and coefficients {cᵢ} ⊂ ℝ.
-
-### 3.3.3 Support Vector Machines
-
-**Dual Form (Kernel Form):**
-
-```
-max_α Σᵢ αᵢ - (1/2)Σᵢⱼ αᵢαⱼyᵢyⱼk(xᵢ, xⱼ)
-
-subject to: 0 ≤ αᵢ ≤ C, Σᵢ αᵢyᵢ = 0
-```
-
-**Decision Function:**
-
-```
-f(x) = sign(Σᵢ αᵢyᵢk(xᵢ, x) + b)
-```
-
-### 3.3.4 The RBF (Gaussian) Kernel
-
-```
-k_RBF(x, x') = exp(-||x - x'||² / 2σ²)
-```
-
-Corresponds to infinite-dimensional feature space.
-
-## 3.4 Quantum Kernels
-
-### 3.4.1 Fidelity Quantum Kernel (FQK)
-
-Standard quantum kernel computes state overlap:
-
-```
-k_FQK(x, x') = |⟨φ(x')|φ(x)⟩|² = |⟨0ⁿ|U†(x')U(x)|0ⁿ⟩|²
-```
-
-**Limitations:**
-- Exponentially small for distant points
-- Requires full state access
-- Numerical instability
-
-### 3.4.2 Projected Quantum Kernel (PQK)
-
-Computes kernel from reduced density matrices:
-
-```
-k_PQK(x, x') = exp(-α Σᵢ ||ρᵢ(x) - ρᵢ(x')||²_F)
-```
-
-where ρᵢ(x) is the single-qubit reduced density matrix.
-
-**Advantages over FQK:**
-
-| Property | FQK | PQK |
-|----------|-----|-----|
-| Dimensionality | 2ⁿ (full Hilbert space) | 3n (local observables) |
-| Numerical stability | Exponentially small values | Well-conditioned |
-| Classical simulability | Requires full state | Only local expectation values |
+ML Analogy: Like a fixed linear transformation that spreads information.
 
 ---
 
-# 4. Projected Quantum Kernels
+ROTATION GATES (Rx, Ry, Rz):
+- Rotate the qubit state around X, Y, or Z axis of Bloch sphere
+- Take a parameter θ (the rotation angle)
 
-## 4.1 Mathematical Derivation
+Rz(θ) = | e^(-iθ/2)    0      |
+        |    0      e^(iθ/2)  |
 
-### 4.1.1 Pauli Matrices
+ML Analogy: These are our PARAMETERIZED transformations - like weights in a neural network. We encode our data into these rotation angles!
 
-```
-     ┌     ┐         ┌      ┐         ┌      ┐
-X =  │ 0 1 │    Y =  │ 0 -i │    Z =  │ 1  0 │
-     │ 1 0 │         │ i  0 │         │ 0 -1 │
-     └     ┘         └      ┘         └      ┘
-```
+---
 
-**Properties:**
-- Hermitian: P† = P
-- Unitary: P² = I
-- Traceless: Tr(P) = 0
-- Eigenvalues: ±1
+T GATE:
+- Fixed π/8 rotation around Z axis
+- Creates "magic states" useful for certain computations
 
-### 4.1.2 Bloch Vector Representation
+T = | 1    0        |
+    | 0   e^(iπ/4)  |
+{code}
 
-Any single-qubit state can be written as:
+h3. 2.3.2 Two-Qubit Gates (Creating Entanglement)
 
-```
-ρ = (1/2)(I + r⃗ · σ⃗) = (1/2)(I + rₓX + rᵧY + rᵤZ)
-```
+{code:title=Common Two-Qubit Gates}
+CNOT (Controlled-NOT):
+- Flips second qubit IF first qubit is |1⟩
+- Creates entanglement when applied to superposition
 
-where the Bloch vector r⃗ = (rₓ, rᵧ, rᵤ) has:
+CNOT|00⟩ = |00⟩
+CNOT|01⟩ = |01⟩
+CNOT|10⟩ = |11⟩  (flipped!)
+CNOT|11⟩ = |10⟩  (flipped!)
 
-```
-rₓ = ⟨X⟩,  rᵧ = ⟨Y⟩,  rᵤ = ⟨Z⟩
-```
+---
 
-### 4.1.3 Frobenius Distance
+XX-PHASE GATE (R_XX):
+- Rotates jointly around X⊗X direction
+- Used in our Hamiltonian ansatz
+- Creates entanglement based on rotation angle
 
-For single-qubit RDMs with Bloch vectors r⃗ and s⃗:
+R_XX(θ) = | cos(θ/2)    0         0      -i·sin(θ/2) |
+          |    0     cos(θ/2) -i·sin(θ/2)     0      |
+          |    0    -i·sin(θ/2) cos(θ/2)      0      |
+          |-i·sin(θ/2)   0         0       cos(θ/2)  |
 
-```
-||ρ - σ||²_F = (1/2)||r⃗ - s⃗||² = (1/2)[(rₓ-sₓ)² + (rᵧ-sᵧ)² + (rᵤ-sᵤ)²]
-```
+ML Analogy: This is how we encode FEATURE INTERACTIONS. The rotation angle depends on TWO features, creating non-linear coupling.
 
-### 4.1.4 Complete PQK Formula
+---
 
-**Definition:**
+CZ (Controlled-Z):
+- Applies Z gate to second qubit IF first qubit is |1⟩
+- Used in Magic ansatz
+{code}
 
-```
+h2. 2.4 Quantum Circuits (Putting It All Together)
+
+A quantum circuit is a sequence of gates applied to qubits - like a computational graph in deep learning.
+
+{code:title=Circuit Structure}
+QUANTUM CIRCUIT ANATOMY:
+
+Initial State     Gates (Layers)           Measurement
+    |                  |                       |
+    v                  v                       v
+
+|0⟩ ─────[H]─────[Rz(x₁)]─────[XX]─────────── ⟨X⟩, ⟨Y⟩, ⟨Z⟩
+                               |
+|0⟩ ─────[H]─────[Rz(x₂)]─────[XX]─────────── ⟨X⟩, ⟨Y⟩, ⟨Z⟩
+                               |
+|0⟩ ─────[H]─────[Rz(x₃)]─────[XX]─────────── ⟨X⟩, ⟨Y⟩, ⟨Z⟩
+
+Where:
+- |0⟩: Initial qubit states (all zeros)
+- [H]: Hadamard gates (create superposition)
+- [Rz(xᵢ)]: Rotation gates encoding feature xᵢ
+- [XX]: Entangling gates between adjacent qubits
+- ⟨X⟩, ⟨Y⟩, ⟨Z⟩: Measured expectation values (our output features)
+{code}
+
+*ML Analogy:* Think of a quantum circuit like a neural network:
+- Initial state = input layer
+- Gates = layers with transformations
+- Measurements = output layer
+- But unlike neural networks, we don't train the circuit - we fix it and use it as a feature extractor
+
+----
+
+h1. 3. The Projected Quantum Kernel Method
+
+Now that you understand the quantum basics, let's see how we use them for machine learning.
+
+h2. 3.1 The Big Picture: Quantum Feature Maps
+
+h3. 3.1.1 What is a Feature Map?
+
+In kernel methods, a *feature map* transforms input data into a (usually higher-dimensional) feature space:
+
+{code:title=Classical vs Quantum Feature Maps}
+CLASSICAL RBF FEATURE MAP:
+- Maps x ∈ ℝᵈ to infinite-dimensional space
+- φ(x) = exp(-||x||²/2) * [1, x₁, x₂, x₁², x₁x₂, ...]
+- The RBF kernel computes inner products in this space
+
+QUANTUM FEATURE MAP:
+- Maps x ∈ ℝᵈ to 2ⁿ-dimensional Hilbert space
+- φ(x) = U(x)|0⟩ⁿ (apply circuit to initial state)
+- Result is a quantum state encoding the data
+{code}
+
+h3. 3.1.2 The Problem with Full Quantum Kernels
+
+The standard quantum kernel (Fidelity Quantum Kernel) computes:
+
+{code:title=Fidelity Quantum Kernel}
+k_FQK(x, x') = |⟨φ(x')|φ(x)⟩|²
+
+This measures the overlap between two quantum states.
+
+PROBLEMS:
+1. Values become exponentially small for different inputs
+2. Requires access to full quantum state (2ⁿ complex numbers)
+3. Numerically unstable for practical use
+{code}
+
+h3. 3.1.3 The Solution: Projected Quantum Kernel
+
+Instead of computing full state overlap, we:
+1. *Project* the quantum state to local observables (X, Y, Z on each qubit)
+2. Compare these *classical* 3n-dimensional vectors
+
+{code:title=Projected Quantum Kernel Concept}
+WORKFLOW:
+
+Classical Data x ∈ ℝᵈ
+       │
+       ▼
+Quantum Circuit U(x)
+       │
+       ▼
+Quantum State |ψ(x)⟩ (2ⁿ-dimensional, but we don't store it!)
+       │
+       ▼
+Local Measurements: ⟨X₁⟩, ⟨Y₁⟩, ⟨Z₁⟩, ..., ⟨Xₙ⟩, ⟨Yₙ⟩, ⟨Zₙ⟩
+       │
+       ▼
+Classical Feature Vector Φ(x) ∈ ℝ³ⁿ
+       │
+       ▼
+RBF Kernel: k(x, x') = exp(-α||Φ(x) - Φ(x')||²)
+
+RESULT: We get benefits of quantum feature extraction but work with classical 3n-dimensional vectors!
+{code}
+
+h2. 3.2 Mathematical Derivation (Step by Step)
+
+h3. 3.2.1 Step 1: Pauli Matrices and Measurements
+
+When we "measure" a qubit, we're computing the expectation value of an observable. The three standard observables are the *Pauli matrices*:
+
+{code:title=Pauli Matrices Explained}
+PAULI-X (bit flip):
+X = | 0  1 |
+    | 1  0 |
+
+- Eigenvalues: +1 (eigenvector |+⟩) and -1 (eigenvector |-⟩)
+- Measures "which superposition": |+⟩ vs |-⟩
+- On Bloch sphere: X-axis coordinate
+
+PAULI-Y (bit+phase flip):
+Y = | 0  -i |
+    | i   0 |
+
+- Eigenvalues: +1 and -1
+- On Bloch sphere: Y-axis coordinate
+
+PAULI-Z (phase flip):
+Z = | 1   0 |
+    | 0  -1 |
+
+- Eigenvalues: +1 (eigenvector |0⟩) and -1 (eigenvector |1⟩)
+- Measures "which basis state": |0⟩ vs |1⟩
+- On Bloch sphere: Z-axis coordinate
+
+EXPECTATION VALUES:
+⟨X⟩ = ⟨ψ|X|ψ⟩ = probability(+1) - probability(-1)
+⟨Y⟩ = ⟨ψ|Y|ψ⟩ = ...
+⟨Z⟩ = ⟨ψ|Z|ψ⟩ = probability(|0⟩) - probability(|1⟩)
+
+Range: All expectation values are in [-1, +1]
+{code}
+
+*ML Interpretation:* These three numbers (⟨X⟩, ⟨Y⟩, ⟨Z⟩) completely describe the state of a single qubit. They're the coordinates on the Bloch sphere!
+
+h3. 3.2.2 Step 2: Bloch Vector Representation
+
+Any single-qubit state can be written using its Bloch vector:
+
+{code:title=Bloch Vector}
+DENSITY MATRIX:
+ρ = |ψ⟩⟨ψ| = (1/2)(I + rₓX + rᵧY + r_zZ)
+
+where the Bloch vector r⃗ = (rₓ, rᵧ, r_z) has:
+- rₓ = ⟨X⟩ (X-coordinate on Bloch sphere)
+- rᵧ = ⟨Y⟩ (Y-coordinate)
+- r_z = ⟨Z⟩ (Z-coordinate)
+
+CONSTRAINTS:
+- For pure states: |r⃗| = 1 (on sphere surface)
+- For mixed states: |r⃗| < 1 (inside sphere)
+{code}
+
+h3. 3.2.3 Step 3: Reduced Density Matrices
+
+For multi-qubit systems, each qubit has its own Bloch vector:
+
+{code:title=Reduced Density Matrix}
+For qubit i in an n-qubit system:
+
+ρᵢ = Tr_{other qubits}(|ψ⟩⟨ψ|)
+
+This "traces out" all other qubits, leaving just the local state of qubit i.
+
+The Bloch vector for qubit i:
+- ⟨Xᵢ⟩ = Tr(ρᵢ · X)
+- ⟨Yᵢ⟩ = Tr(ρᵢ · Y)
+- ⟨Zᵢ⟩ = Tr(ρᵢ · Z)
+{code}
+
+*ML Interpretation:* Even though our full quantum state lives in 2ⁿ dimensions, each qubit's local state is described by just 3 numbers. We extract these 3 numbers per qubit, giving us 3n features total.
+
+h3. 3.2.4 Step 4: Distance Between Quantum States
+
+How do we measure the "distance" between two quantum states? We use the *Frobenius distance* between their density matrices:
+
+{code:title=Frobenius Distance}
+FROBENIUS NORM:
+||A||_F = √(Tr(A†A)) = √(Σᵢⱼ |Aᵢⱼ|²)
+
+For single-qubit density matrices with Bloch vectors r⃗ and s⃗:
+
+||ρ - σ||²_F = (1/2)||r⃗ - s⃗||²
+             = (1/2)[(rₓ - sₓ)² + (rᵧ - sᵧ)² + (r_z - s_z)²]
+
+This is just (half) the squared Euclidean distance between Bloch vectors!
+{code}
+
+h3. 3.2.5 Step 5: The Complete PQK Formula
+
+Putting it all together, the *Projected Quantum Kernel* is:
+
+{code:title=Projected Quantum Kernel - Complete Formula}
+STEP 1: Define the quantum distance
+D(x, x') = Σᵢ₌₁ⁿ 2·||ρᵢ(x) - ρᵢ(x')||²_F
+
+Expanding using Bloch vectors:
+D(x, x') = Σᵢ₌₁ⁿ [(⟨Xᵢ⟩ˣ - ⟨Xᵢ⟩ˣ')² + (⟨Yᵢ⟩ˣ - ⟨Yᵢ⟩ˣ')² + (⟨Zᵢ⟩ˣ - ⟨Zᵢ⟩ˣ')²]
+
+STEP 2: Apply RBF kernel formula
 k_PQK(x, x') = exp(-α · D(x, x'))
-```
 
-where the quantum distance is:
+where α > 0 is the bandwidth parameter (like γ in classical RBF).
 
-```
-D(x, x') = Σᵢ₌₁ⁿ 2·[(⟨Xᵢ⟩ˣ - ⟨Xᵢ⟩ˣ')² + (⟨Yᵢ⟩ˣ - ⟨Yᵢ⟩ˣ')² + (⟨Zᵢ⟩ˣ - ⟨Zᵢ⟩ˣ')²]
-```
+EQUIVALENT FORM:
+If we define the projected feature vector:
+Φ(x) = [⟨X₁⟩, ⟨Y₁⟩, ⟨Z₁⟩, ⟨X₂⟩, ⟨Y₂⟩, ⟨Z₂⟩, ..., ⟨Xₙ⟩, ⟨Yₙ⟩, ⟨Zₙ⟩]ᵀ ∈ ℝ³ⁿ
 
-This equals the squared Euclidean distance in the projected feature space:
+Then:
+k_PQK(x, x') = exp(-α · ||Φ(x) - Φ(x')||²)
 
-```
-D(x, x') = ||Φ(x) - Φ(x')||²₂
-```
+This is EXACTLY an RBF kernel in the 3n-dimensional projected feature space!
+{code}
 
-where:
+{panel:title=Key Insight for ML Practitioners|borderStyle=solid|borderColor=#090|titleBGColor=#dfd}
+*The PQK is simply an RBF kernel applied to quantum-derived features.* The "quantum magic" is in HOW we compute the feature vector Φ(x) - we use a quantum circuit as a non-linear feature extractor.
 
-```
-Φ(x) = (⟨X₁⟩, ⟨Y₁⟩, ⟨Z₁⟩, ..., ⟨Xₙ⟩, ⟨Yₙ⟩, ⟨Zₙ⟩) ∈ ℝ³ⁿ
-```
+*Comparison to Deep Learning:* This is similar to using a pre-trained CNN as a feature extractor, then applying a simple classifier on the extracted features. Here, the quantum circuit is our "feature extractor."
+{panel}
 
-## 4.2 Kernel Properties
+h2. 3.3 Why Does This Work? (Theoretical Justification)
 
-**Theorem:** k_PQK is a valid Mercer kernel.
+h3. 3.3.1 Expressiveness of Quantum Feature Maps
 
-**Properties:**
-- k_PQK(x, x) = 1 (self-similarity)
-- k_PQK(x, x') = k_PQK(x', x) (symmetry)
-- 0 < k_PQK(x, x') ≤ 1 (bounded)
+{code:title=Why Quantum Features Are Powerful}
+CLASSICAL RBF:
+- Creates features like: 1, x₁, x₂, x₁², x₁x₂, x₂², x₁³, ...
+- All polynomial-like combinations
 
-## 4.3 Connection to Classical Kernels
+QUANTUM FEATURE MAP:
+- Creates features involving trigonometric functions: sin(γx₁), cos(γx₁x₂), ...
+- Complex interference patterns between features
+- Entanglement creates correlations that polynomial features cannot capture
 
-The PQK is an RBF kernel in a quantum-derived feature space:
+KEY PROPERTY:
+Quantum feature maps can be "classically hard to simulate" - meaning classical computers cannot efficiently compute the same features. This is the source of potential quantum advantage.
+{code}
 
-```
-k_PQK(x, x') = k_RBF(Φ(x), Φ(x'); γ = α)
-```
+h3. 3.3.2 What Information is Captured?
 
-**Key difference:** The quantum circuit acts as a nonlinear feature extractor that:
-1. Encodes data into quantum states
-2. Creates entanglement-mediated correlations
-3. Projects back to classical observables
+{code:title=Information Content Analysis}
+WHAT WE KEEP:
+- All single-qubit marginal distributions
+- Local quantum correlations mediated by entanglement
+- Non-linear functions of input features (via rotations)
 
-## 4.4 Computational Complexity
+WHAT WE LOSE:
+- Full multi-qubit correlations (would need exponential storage)
+- Global entanglement structure
 
-### 4.4.1 Per Data Point
+WHY THIS IS OKAY:
+For many ML tasks, local correlations + entanglement-mediated interactions are sufficient. We trade some quantum expressiveness for classical tractability.
+{code}
 
-| Operation | Complexity | Notes |
-|-----------|------------|-------|
-| Circuit simulation (MPS) | O(n · r · χ³) | χ = bond dimension |
-| Expectation values | O(n · χ²) | Per qubit |
+----
 
-### 4.4.2 Kernel Matrix
+h1. 4. Our Circuit Architecture (The Hamiltonian Ansatz)
 
-| Operation | Complexity |
-|-----------|------------|
-| All MPS simulations | O((N_train + N_test) · n · r · χ³) |
-| Kernel entries | O(N_train · N_test · n) |
+h2. 4.1 Circuit Design Philosophy
 
-### 4.4.3 MPI Parallelization
+h3. 4.1.1 Requirements for a Good Quantum Feature Map
 
-```
-T(P) ≈ T(1)/P  for large N
-```
+{code:title=Feature Map Design Criteria}
+1. DATA ENCODING: Must encode all input features into quantum state
+2. ENTANGLEMENT: Must create correlations between features
+3. EXPRESSIVENESS: Must create non-trivial, non-linear features
+4. SIMULABILITY: Must be efficiently simulable on classical computers
+5. PARAMETERIZATION: Hyperparameters to tune for different datasets
+{code}
 
-where P is the number of MPI processes.
+h3. 4.1.2 Why "Hamiltonian" Ansatz?
+
+The name comes from physics: our circuit structure resembles time evolution under a quantum Hamiltonian (energy operator). Specifically:
+
+{code:title=Physics Inspiration}
+QUANTUM TIME EVOLUTION:
+|ψ(t)⟩ = exp(-iHt)|ψ(0)⟩
+
+where H is the Hamiltonian operator.
+
+OUR CIRCUIT:
+|ψ(x)⟩ = exp(-iH(x)·γ)|+⟩ⁿ
+
+where H(x) encodes our data features.
+
+The Rz and R_XX gates implement this evolution approximately.
+{code}
+
+h2. 4.2 Complete Circuit Structure
+
+{code:title=Hamiltonian Ansatz - Layer by Layer}
+═══════════════════════════════════════════════════════════════════════════════
+                        HAMILTONIAN ANSATZ CIRCUIT
+═══════════════════════════════════════════════════════════════════════════════
+
+INPUT: Classical feature vector x = [x₁, x₂, ..., xₙ] ∈ ℝⁿ
+       (scaled to [-π, π] or [-π/4, π/4])
+
+PARAMETERS:
+- n: number of qubits (= number of features)
+- r: number of layer repetitions (default: 2-10)
+- γ: rotation scaling factor (default: 0.1-1.0)
+
+───────────────────────────────────────────────────────────────────────────────
+LAYER 0: INITIALIZATION (applied once)
+───────────────────────────────────────────────────────────────────────────────
+
+Apply Hadamard (H) gate to each qubit:
+
+|0⟩ ──[H]── |+⟩ = (|0⟩ + |1⟩)/√2
+
+PURPOSE: Create equal superposition as starting point.
+         Without this, rotations would have no effect on |0⟩ state.
+
+RESULT: |ψ_init⟩ = |+⟩⊗ⁿ = (1/√2ⁿ) Σ |i₁i₂...iₙ⟩
+
+───────────────────────────────────────────────────────────────────────────────
+LAYER 1-r: ENCODING + ENTANGLEMENT (repeated r times)
+───────────────────────────────────────────────────────────────────────────────
+
+STEP A: Single-qubit rotations (DATA ENCODING)
+
+For each qubit i, apply:
+  Rz(θᵢ) where θᵢ = γ · xᵢ / π
+
+|ψ⟩ ──[Rz(γxᵢ/π)]── rotated |ψ⟩
+
+WHAT THIS DOES:
+- Encodes feature xᵢ as a rotation angle
+- γ scales the rotation (smaller γ = gentler encoding)
+- Division by π normalizes to reasonable rotation range
+
+MATHEMATICAL EFFECT:
+Rz(θ)|ψ⟩ adds a phase e^(±iθ/2) depending on |0⟩ vs |1⟩ component
 
 ---
 
-# 5. Tensor Network Simulation
+STEP B: Two-qubit entangling gates (FEATURE INTERACTION)
 
-## 5.1 Matrix Product States (MPS)
+For each pair (i, j) in entanglement map, apply:
+  R_XX(θᵢⱼ) where θᵢⱼ = γ² · (1 - xᵢ) · (1 - xⱼ)
 
-### 5.1.1 Definition
+WHAT THIS DOES:
+- Creates entanglement between qubits i and j
+- Rotation angle depends on BOTH features xᵢ and xⱼ
+- This is how we capture FEATURE INTERACTIONS
 
-An MPS represents an n-qubit state as a chain of tensors:
+MATHEMATICAL EFFECT:
+R_XX(θ) = exp(-i·θ·X⊗X/2)
 
-```
-|ψ⟩ = Σ_{i₁,...,iₙ} A^[1]_{i₁} A^[2]_{i₂} ... A^[n]_{iₙ} |i₁...iₙ⟩
-```
+This jointly rotates both qubits in a correlated way.
+
+───────────────────────────────────────────────────────────────────────────────
+OUTPUT: MEASUREMENT (expectation values)
+───────────────────────────────────────────────────────────────────────────────
+
+For each qubit i, compute:
+  ⟨Xᵢ⟩ = ⟨ψ_final|Xᵢ|ψ_final⟩
+  ⟨Yᵢ⟩ = ⟨ψ_final|Yᵢ|ψ_final⟩
+  ⟨Zᵢ⟩ = ⟨ψ_final|Zᵢ|ψ_final⟩
+
+OUTPUT: Φ(x) = [⟨X₁⟩, ⟨Y₁⟩, ⟨Z₁⟩, ..., ⟨Xₙ⟩, ⟨Yₙ⟩, ⟨Zₙ⟩] ∈ ℝ³ⁿ
+{code}
+
+h2. 4.3 Visual Circuit Diagram
+
+{code:title=Circuit Diagram (5 qubits, 2 reps)}
+q₀: |0⟩─[H]─[Rz]─[XX]──────────[Rz]─[XX]──────────⟨X₀,Y₀,Z₀⟩
+              │                  │
+q₁: |0⟩─[H]─[Rz]─[XX]─[XX]─────[Rz]─[XX]─[XX]────⟨X₁,Y₁,Z₁⟩
+                   │                  │
+q₂: |0⟩─[H]─[Rz]─────[XX]─[XX]─[Rz]─────[XX]─[XX]⟨X₂,Y₂,Z₂⟩
+                       │                  │
+q₃: |0⟩─[H]─[Rz]───────[XX]─[XX][Rz]─────[XX]─[XX]⟨X₃,Y₃,Z₃⟩
+                             │                │
+q₄: |0⟩─[H]─[Rz]─────────────[XX][Rz]─────────[XX]⟨X₄,Y₄,Z₄⟩
+        │    │                │    │              │
+        └────┴── Rep 1 ───────┘    └── Rep 2 ─────┘
+
+Legend:
+[H]  = Hadamard gate
+[Rz] = Rz(γxᵢ/π) rotation (data encoding)
+[XX] = R_XX(γ²(1-xᵢ)(1-xⱼ)) entangling gate
+{code}
+
+h2. 4.4 Entanglement Topology
+
+h3. 4.4.1 Linear Nearest-Neighbor Connectivity
+
+{code:title=Entanglement Map}
+We use LINEAR nearest-neighbor connectivity:
+
+Qubits:  0 ─── 1 ─── 2 ─── 3 ─── 4
+
+Entanglement pairs: [(0,1), (1,2), (2,3), (3,4)]
+
+WHY LINEAR?
+1. Matches real quantum hardware constraints
+2. Sufficient for capturing local correlations
+3. Enables efficient MPS simulation (see next section)
+
+ALTERNATIVE: Full connectivity (all pairs)
+- Would create [(0,1), (0,2), (0,3), ..., (3,4)]
+- More expressive but exponentially harder to simulate
+{code}
+
+h3. 4.4.2 Gate Ordering
+
+{code:title=Entanglement Graph Algorithm}
+def entanglement_graph(nq, nn=1):
+    """
+    Generate non-overlapping gate layers.
+
+    nq: number of qubits
+    nn: neighborhood depth (1 = nearest neighbors only)
+    """
+    pairs = []
+    for distance in range(1, nn+1):
+        busy = set()
+        # Layer 1: Non-overlapping pairs
+        for i in range(nq):
+            if i not in busy and i+distance < nq:
+                pairs.append((i, i+distance))
+                busy.add(i+distance)
+        # Layer 2: Remaining pairs
+        for i in busy:
+            if i+distance < nq:
+                pairs.append((i, i+distance))
+    return pairs
+
+# Example: entanglement_graph(5, 1)
+# Returns: [(0,1), (2,3), (1,2), (3,4)]
+# This allows parallel execution of (0,1) and (2,3), then (1,2) and (3,4)
+{code}
+
+h2. 4.5 Alternative: The Magic Ansatz
+
+{code:title=Magic Ansatz Structure}
+For comparison, the MAGIC ANSATZ uses different gates:
+
+LAYER STRUCTURE (repeated r times):
+1. Hadamard (H) on all qubits
+2. T gate (π/8 rotation) on all qubits
+3. CZ gates on entangled pairs
+4. Rz(xᵢ) encoding on each qubit
+
+q₀: |0⟩─[H]─[T]─[CZ]────[Rz]─[H]─[T]─[CZ]────[Rz]─...
+                 │                    │
+q₁: |0⟩─[H]─[T]─[CZ]─[CZ][Rz]─[H]─[T]─[CZ]─[CZ][Rz]─...
+                      │                    │
+q₂: |0⟩─[H]─[T]──────[CZ][Rz]─[H]─[T]──────[CZ][Rz]─...
+
+WHY "MAGIC"?
+- The H+T combination creates "magic states"
+- These states exhibit quantum contextuality
+- May be useful for specific data distributions
+
+COMPARISON:
+- Hamiltonian: Smooth, continuous encoding (better for continuous features)
+- Magic: Discrete, structured encoding (may work better for categorical-like data)
+{code}
+
+----
+
+h1. 5. Tensor Network Simulation (How We Compute This Efficiently)
+
+{note:title=Why This Section is Important}
+The previous sections explained WHAT we compute. This section explains HOW we compute it efficiently on classical computers. This is the key engineering that makes the whole system practical.
+{note}
+
+h2. 5.1 The Computational Challenge
+
+h3. 5.1.1 The Exponential Wall
+
+{code:title=Why Naive Simulation Fails}
+NAIVE APPROACH:
+Store the full quantum state as a vector of 2ⁿ complex numbers.
+
+MEMORY REQUIREMENTS:
+| Qubits | State Vector Size | Memory (complex128) |
+|--------|-------------------|---------------------|
+| 20     | 2²⁰ = 1M          | 16 MB               |
+| 30     | 2³⁰ = 1B          | 16 GB               |
+| 40     | 2⁴⁰ = 1T          | 16 TB               |
+| 50     | 2⁵⁰ = 1P          | 16 PB               |
+
+PROBLEM: Even 50 qubits exceeds world's total storage!
+{code}
+
+h3. 5.1.2 The Key Insight: Exploiting Structure
+
+{code:title=Why MPS Works}
+NOT ALL QUANTUM STATES ARE EQUALLY COMPLEX
+
+Key observation: Many useful quantum states have LIMITED ENTANGLEMENT.
+
+AREA LAW of entanglement:
+For 1D systems, entanglement across a cut grows with boundary size, not volume.
+S(ρ_A) ≤ c · |∂A|
+
+OUR CIRCUITS:
+- Linear connectivity → 1D entanglement structure
+- Shallow depth → bounded entanglement growth
+- Result: Can be represented efficiently!
+{code}
+
+h2. 5.2 Matrix Product States (MPS)
+
+h3. 5.2.1 The MPS Representation
+
+{code:title=MPS Definition}
+STANDARD STATE VECTOR:
+|ψ⟩ = Σ c_{i₁i₂...iₙ} |i₁i₂...iₙ⟩
+
+where c is a tensor with 2ⁿ elements.
+
+MATRIX PRODUCT STATE:
+|ψ⟩ = Σ A¹[i₁] · A²[i₂] · ... · Aⁿ[iₙ] |i₁i₂...iₙ⟩
 
 where:
-- A^[k]_{iₖ} is a matrix of dimensions χₖ₋₁ × χₖ
-- iₖ ∈ {0, 1} is the physical index (qubit state)
-- χₖ is the **bond dimension** at bond k
+- Each Aᵏ[iₖ] is a MATRIX (not just a number)
+- iₖ ∈ {0, 1} is the physical index
+- Matrix dimensions are χₖ₋₁ × χₖ
+- χₖ is called the BOND DIMENSION
 
-**Pictorial Representation:**
+PICTORIAL REPRESENTATION:
+    i₁    i₂    i₃    i₄    i₅     (physical indices)
+    │     │     │     │     │
+   [A¹]──[A²]──[A³]──[A⁴]──[A⁵]    (MPS tensors)
+      χ₁   χ₂   χ₃   χ₄           (bond dimensions)
 
-```
-    i₁    i₂    i₃    i₄    i₅
-    |     |     |     |     |
-   [A¹]--[A²]--[A³]--[A⁴]--[A⁵]
-       χ₁   χ₂   χ₃   χ₄
-```
+Each line represents matrix multiplication.
+The contraction of all matrices gives the coefficient c_{i₁i₂...iₙ}.
+{code}
 
-### 5.1.2 Bond Dimension and Entanglement
+h3. 5.2.2 Bond Dimension and Compression
 
-The bond dimension χ controls entanglement capacity:
+{code:title=Bond Dimension Explained}
+BOND DIMENSION (χ):
+- Controls the "capacity" of the MPS representation
+- Larger χ = more entanglement can be captured
+- Smaller χ = more compression
 
-```
-S(ρ_left) ≤ log₂(χₖ)
-```
+PARAMETER COUNT:
+- Full state vector: 2ⁿ complex numbers
+- MPS with bond dim χ: O(n · χ²) complex numbers
 
-The entanglement entropy across a cut is bounded by log of bond dimension.
+EXAMPLE (n=50 qubits):
+- Full state: 2⁵⁰ ≈ 10¹⁵ numbers (impossible)
+- MPS with χ=100: 50 × 100² × 2 = 10⁶ numbers (easy!)
 
-### 5.1.3 Initial State
+ENTANGLEMENT BOUND:
+Maximum entanglement entropy across any cut: S ≤ log₂(χ)
 
-The all-zeros state |0⟩^⊗n has trivial MPS with χ = 1 (product state).
+For χ=100: S_max = log₂(100) ≈ 6.6 bits
+This is MUCH less than the maximum possible (n/2 bits for n qubits)
+{code}
 
-## 5.2 Gate Application on MPS
+h3. 5.2.3 Why This Works for Our Circuits
 
-### 5.2.1 Single-Qubit Gates
+{code:title=MPS Suitability Analysis}
+OUR CIRCUIT PROPERTIES:
 
-```
-Ã^[k]_j = Σᵢ U_ji A^[k]_i
-```
+1. LINEAR CONNECTIVITY
+   - Qubits only interact with neighbors
+   - Entanglement has 1D structure
+   - MPS is designed for exactly this!
 
-Complexity: O(χ²) — does not increase bond dimension.
+2. SHALLOW DEPTH
+   - Few layers (r = 2-10)
+   - Entanglement grows slowly
+   - Bond dimension stays manageable
 
-### 5.2.2 Two-Qubit Gates (Adjacent Sites)
+3. LOCAL GATES
+   - Single-qubit gates: Don't increase χ
+   - Two-qubit gates on neighbors: Increase χ by at most 2x
 
-**Algorithm:**
-1. Contract neighboring tensors: Θ = A^[k] · A^[k+1]
-2. Apply gate: Θ̃ = U · Θ
-3. Decompose via SVD: Θ̃ = U Σ V†
-4. Truncate to maximum bond dimension
+EMPIRICAL OBSERVATION:
+For our Hamiltonian ansatz with r ≤ 10, χ rarely exceeds 50.
+This makes simulation very efficient.
+{code}
 
-Complexity: O(χ³) for SVD, may increase χ.
+h2. 5.3 Gate Application on MPS
 
-### 5.2.3 Non-Adjacent Gates
+h3. 5.3.1 Single-Qubit Gates (Easy Case)
 
-For gates between non-adjacent qubits:
-1. SWAP qubits until adjacent
-2. Apply the gate
-3. SWAP back
+{code:title=Single-Qubit Gate Application}
+OPERATION: Apply gate U to qubit k
 
-The pytket compiler handles this via `DecomposeBRIDGE` pass.
+ALGORITHM:
+1. Find tensor Aᵏ at position k
+2. For each physical index value j:
+   Ãᵏ[j] = Σᵢ U[j,i] · Aᵏ[i]
+3. Replace Aᵏ with Ãᵏ
 
-## 5.3 ITensor Implementation
+COMPLEXITY: O(χ²) - just matrix operations
+BOND DIMENSION: Unchanged! Single-qubit gates don't create entanglement.
 
-### 5.3.1 Overview
+EXAMPLE (Rz gate):
+Aᵏ[0] → e^(-iθ/2) · Aᵏ[0]
+Aᵏ[1] → e^(+iθ/2) · Aᵏ[1]
+{code}
 
-ITensor is a C++ library for tensor network computations developed at the Flatiron Institute.
+h3. 5.3.2 Two-Qubit Gates (The Tricky Part)
 
-**Reference:** Fishman, M., White, S. R., & Stoudenmire, E. M. (2022). "The ITensor Software Library for Tensor Network Calculations." SciPost Physics Codebases, 4.
+{code:title=Two-Qubit Gate Application}
+OPERATION: Apply gate U to adjacent qubits k and k+1
 
-### 5.3.2 Gate Application Pattern (C++)
+ALGORITHM:
+1. CONTRACT neighboring tensors:
+   Θ[i,j] = Σ_α Aᵏ[i]_α · Aᵏ⁺¹[j]_α
+   (This creates a 4-index tensor)
 
-**Single-Qubit Gate:**
-```cpp
-psi.position(i1+1);
-auto G = op(site_inds, "Rz", i1+1, {"alpha=", a});
-auto new_MPS = G * psi(i1+1);
-new_MPS.noPrime();
-psi.set(i1+1, new_MPS);
-```
+2. APPLY the gate:
+   Θ̃[i',j'] = Σ_{i,j} U[i'j', ij] · Θ[i,j]
 
-**Two-Qubit Gate:**
-```cpp
-psi.position(i1+1);
-auto wf = psi(i1+1) * psi(i2+1);
-wf *= G;
-wf.noPrime();
-auto [U, S, V] = svd(wf, inds(psi(i1+1)), {"Cutoff=", 1E-10});
-psi.set(i1+1, U);
-psi.set(i2+1, S*V);
-```
+3. DECOMPOSE via SVD (Singular Value Decomposition):
+   Θ̃ = U · Σ · V†
+   where Σ is diagonal with singular values σ₁ ≥ σ₂ ≥ ... ≥ σᵣ
 
-### 5.3.3 Expectation Value Computation
+4. TRUNCATE to maximum bond dimension χ_max:
+   Keep only top χ_max singular values
+   This introduces small approximation error
 
-```cpp
-for (int i = 0; i < no_sites; i++) {
-    psi.position(i+1);
-    auto scalar_x = eltC(
-        dag(prime(psi.A(i+1), "Site")) *
-        site_inds.op("X_half", i+1) *
-        psi.A(i+1)
-    ).real();
-    // Similarly for Y, Z
+5. UPDATE MPS:
+   Aᵏ ← U
+   Aᵏ⁺¹ ← Σ · V†
+
+COMPLEXITY: O(χ³) due to SVD
+BOND DIMENSION: Can increase up to 2χ before truncation
+
+TRUNCATION ERROR:
+Error ≤ √(Σᵢ>χ_max σᵢ²)
+With cutoff 10⁻¹⁰, errors are negligible.
+{code}
+
+{panel:title=ML Analogy: SVD Truncation|borderStyle=solid}
+The SVD truncation in MPS is similar to *PCA truncation* or *low-rank approximation* in classical ML. We're keeping the "most important" components and discarding the rest.
+
+The difference: In MPS, this happens at EVERY two-qubit gate, not just once at the end. The errors can accumulate, but for our shallow circuits, they remain small.
+{panel}
+
+h3. 5.3.3 Non-Adjacent Gates (SWAP Strategy)
+
+{code:title=Non-Adjacent Gate Handling}
+PROBLEM: What if we need a gate between non-adjacent qubits?
+
+Example: Gate between qubits 0 and 3
+   q₀ ─── q₁ ─── q₂ ─── q₃
+
+SOLUTION: Use SWAP gates to move qubits next to each other
+
+ALGORITHM:
+1. SWAP q₀ with q₁: Now logical qubit 0 is at position 1
+2. SWAP (logical 0) with q₂: Now at position 2
+3. Apply the gate between positions 2 and 3
+4. SWAP back to restore original ordering
+
+COMPLEXITY: O(d × χ³) where d is the distance between qubits
+
+OUR APPROACH:
+The pytket compiler automatically handles this with its DecomposeBRIDGE pass.
+It inserts the necessary SWAP gates during circuit compilation.
+{code}
+
+h2. 5.4 Computing Expectation Values
+
+{code:title=Expectation Value Computation}
+GOAL: Compute ⟨ψ|Xᵢ|ψ⟩ for qubit i (similarly for Y, Z)
+
+ALGORITHM (using canonical form):
+1. Put MPS in "mixed canonical form" centered at site i
+   - Sites 1 to i-1: Left-canonical (L†L = I)
+   - Sites i+1 to n: Right-canonical (RR† = I)
+   - Site i: Contains all the "weight"
+
+2. Compute local expectation value:
+   ⟨Xᵢ⟩ = Tr(Aⁱ† · X · Aⁱ)
+
+   Due to canonical form, all other sites cancel out!
+
+COMPLEXITY: O(χ²) per expectation value
+TOTAL: O(n × χ²) for all 3n expectation values
+
+WHY CANONICAL FORM HELPS:
+
+Before:
+⟨ψ|Xᵢ|ψ⟩ = Σ (A¹...Aⁱ⁻¹)† · (Aⁱ†XAⁱ) · (Aⁱ⁺¹...Aⁿ)(A¹...Aⁿ)
+         = Complicated contraction over entire network
+
+After (canonical form):
+⟨ψ|Xᵢ|ψ⟩ = Tr(Aⁱ† · X · Aⁱ)
+         = Simple local computation!
+{code}
+
+h2. 5.5 ITensor Library Implementation
+
+h3. 5.5.1 What is ITensor?
+
+{code:title=ITensor Overview}
+ITensor is a C++ library for tensor network calculations.
+
+KEY FEATURES:
+- Automatic index contraction (you don't manage dimensions manually)
+- Efficient SVD and tensor decompositions
+- Built-in MPS/MPO algorithms
+- Used by quantum physics researchers worldwide
+
+REFERENCE:
+Fishman, M., White, S. R., & Stoudenmire, E. M. (2022).
+"The ITensor Software Library for Tensor Network Calculations."
+SciPost Physics Codebases, 4.
+{code}
+
+h3. 5.5.2 Our C++ Implementation
+
+{code:title=Key C++ Code (helloitensor.cc)}
+// Main simulation function
+MPS apply_gates(vector<tuple<int,int,int,double>> circuits,
+                Qubit site_inds, int N, double cutoff) {
+
+    // 1. Initialize MPS in |0⟩^⊗n state
+    auto init = InitState(site_inds);
+    for(auto n : range1(N)) {
+        init.set(n, "Up");  // |0⟩ state
+    }
+    auto psi = MPS(init);
+
+    // 2. Apply each gate
+    for (auto gate : circuits) {
+        auto type = get<0>(gate);   // Gate type (0=H, 1=Rx, 2=Rz, etc.)
+        auto q1 = get<1>(gate);     // First qubit
+        auto q2 = get<2>(gate);     // Second qubit (-1 for single-qubit)
+        auto angle = get<3>(gate);  // Rotation angle
+
+        if (type == 0) {  // Hadamard
+            psi.position(q1+1);
+            auto G = op(site_inds, "H", q1+1);
+            auto new_MPS = G * psi(q1+1);
+            new_MPS.noPrime();
+            psi.set(q1+1, new_MPS);
+        }
+        else if (type == 2) {  // Rz
+            psi.position(q1+1);
+            auto G = op(site_inds, "Rz", q1+1, {"alpha=", angle});
+            auto new_MPS = G * psi(q1+1);
+            new_MPS.noPrime();
+            psi.set(q1+1, new_MPS);
+        }
+        else if (type == 3) {  // XXPhase (two-qubit)
+            // Contract two sites
+            psi.position(q1+1);
+            auto wf = psi(q1+1) * psi(q2+1);
+
+            // Apply gate
+            auto opx1 = op(site_inds, "X", q1+1);
+            auto opx2 = op(site_inds, "X", q2+1);
+            auto G = expHermitian(opx2 * opx1, -i*theta);
+            wf *= G;
+            wf.noPrime();
+
+            // SVD to restore MPS form
+            auto [U, S, V] = svd(wf, inds(psi(q1+1)), {"Cutoff=", 1E-10});
+            psi.set(q1+1, U);
+            psi.set(q2+1, S*V);
+        }
+        // ... other gate types
+    }
+    return psi;
 }
-```
 
-### 5.3.4 Python-C++ Bridge
+// Extract expectation values
+vector<vector<double>> circuit_xyz_exp(gates, n_qubits) {
+    MPS psi = apply_gates(gates, sites, n_qubits, 1E-16);
 
-```cpp
+    vector<vector<double>> results;
+    for (int i = 0; i < n_qubits; i++) {
+        psi.position(i+1);
+
+        double x = eltC(dag(prime(psi.A(i+1),"Site")) *
+                        sites.op("X_half",i+1) * psi.A(i+1)).real();
+        double y = eltC(dag(prime(psi.A(i+1),"Site")) *
+                        sites.op("Y_half",i+1) * psi.A(i+1)).real();
+        double z = eltC(dag(prime(psi.A(i+1),"Site")) *
+                        sites.op("Z_half",i+1) * psi.A(i+1)).real();
+
+        results.push_back({x, y, z});
+    }
+    return results;
+}
+{code}
+
+h3. 5.5.3 Python-C++ Bridge
+
+{code:title=pybind11 Interface}
+// C++ side (in helloitensor.cc)
 PYBIND11_MODULE(helloitensor, m) {
-    m.def("circuit_xyz_exp",
-          &circuit_xyz_exp<int,double>,
-          "Extract X,Y,Z expectation values from circuit simulation");
+    m.def("circuit_xyz_exp", &circuit_xyz_exp<int,double>,
+          "Extract X,Y,Z expectation values from circuit");
 }
-```
 
-**Python Usage:**
-```python
+// Python side
 from helloitensor import circuit_xyz_exp
-exp_xyz = circuit_xyz_exp(circuit_gates, n_qubits)
-# Returns: [[⟨X₁⟩, ⟨Y₁⟩, ⟨Z₁⟩], [⟨X₂⟩, ⟨Y₂⟩, ⟨Z₂⟩], ...]
-```
 
-## 5.4 Complexity and Scalability
+# gates = [[type, q1, q2, angle], ...]
+# Returns [[<X1>, <Y1>, <Z1>], [<X2>, <Y2>, <Z2>], ...]
+expectation_values = circuit_xyz_exp(gate_list, n_qubits)
+{code}
 
-### 5.4.1 MPS Operations
+h2. 5.6 Complexity Summary
 
-| Operation | Complexity |
-|-----------|------------|
-| Initialize |0⟩^⊗n | O(n) |
-| Single-qubit gate | O(χ²) |
-| Two-qubit gate (adjacent) | O(χ³) |
-| Two-qubit gate (distance d) | O(d · χ³) |
-| Expectation value | O(χ²) |
+||Operation||Complexity||Notes||
+|Initialize \|0⟩^⊗n|O(n)|χ = 1|
+|Single-qubit gate|O(χ²)|No χ increase|
+|Two-qubit gate (adjacent)|O(χ³)|SVD step, may increase χ|
+|Two-qubit gate (distance d)|O(d × χ³)|Requires d SWAPs|
+|Expectation value (per qubit)|O(χ²)|Using canonical form|
+|Full circuit simulation|O(n × r × χ³)|n qubits, r reps|
 
-### 5.4.2 When MPS Works Well
+{panel:title=Practical Performance|borderStyle=solid}
+For typical parameters (n=12 qubits, r=10 reps, χ≈50):
+- Single circuit simulation: ~50-100 ms
+- All expectation values: ~5 ms
+- Total per data point: ~100 ms
+{panel}
 
-MPS simulation is efficient when:
-- Circuits have linear (1D) connectivity
-- Entanglement remains bounded
-- Gates are local (nearest-neighbor)
+----
 
-### 5.4.3 Scalability Guidelines
+h1. 6. Complete Pipeline Implementation
 
-| Qubits | Recommended χ_max | Memory (per state) |
-|--------|-------------------|-------------------|
-| 10-20 | 50 | ~1 MB |
-| 20-50 | 100 | ~10 MB |
-| 50-100 | 200 | ~100 MB |
-| 100+ | 500 | ~1 GB |
+h2. 6.1 Stage 1: Data Preprocessing
 
----
+{code:title=Complete Preprocessing Pipeline}
+═══════════════════════════════════════════════════════════════════════════════
+                         DATA PREPROCESSING PIPELINE
+═══════════════════════════════════════════════════════════════════════════════
 
-# 6. QMLOps Pipeline
+INPUT: Raw CSV data with features and labels
 
-## 6.1 Pipeline Stages Overview
+───────────────────────────────────────────────────────────────────────────────
+STEP 1: Load and Clean Data
+───────────────────────────────────────────────────────────────────────────────
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           COMPLETE PIPELINE FLOW                            │
-└─────────────────────────────────────────────────────────────────────────────┘
+import pandas as pd
+import numpy as np
 
-Stage 1: DATA INGESTION
-├── Load CSV data
-├── Handle missing values
-├── Encode class labels
-└── Filter unknown labels
+# Load data
+data = pd.read_csv('elliptic_txs_features.csv')
+labels = pd.read_csv('elliptic_txs_classes.csv')
 
-Stage 2: PREPROCESSING
-├── QuantileTransform (handle outliers)
-├── StandardScaler (zero mean, unit variance)
-├── MinMaxScaler (scale to [-π, π])
-└── Feature selection (top k features)
+# Encode labels: "1" = illicit → 0, "2" = licit → 1, "unknown" → remove
+labels.loc[labels["Class"] == "1", "Class"] = 0   # Fraud
+labels.loc[labels["Class"] == "2", "Class"] = 1   # Legitimate
+labels.loc[labels["Class"] == "unknown", "Class"] = 99  # To be removed
 
-Stage 3: CLASS BALANCING
-├── Stratified sampling
-├── n_illicit samples from fraud class
-├── n_licit samples from legitimate class
-└── Train/test split (80/20)
+# Remove unlabeled data
+clean_data = data.drop(np.where(labels['Class']==99)[0])
 
-Stage 4: QUANTUM FEATURE EXTRACTION
-├── Build symbolic circuit (pytket)
-├── Substitute data values
-├── Compile to linear architecture
-├── Simulate with MPS (ITensor)
-└── Extract ⟨X⟩, ⟨Y⟩, ⟨Z⟩
+───────────────────────────────────────────────────────────────────────────────
+STEP 2: Class Balancing (Handle Imbalance)
+───────────────────────────────────────────────────────────────────────────────
 
-Stage 5: KERNEL CONSTRUCTION
-├── Compute Φ(x) for all training points
-├── Build K_train (N×N symmetric)
-├── Build K_test (M×N)
-└── MPI parallelization
+WHY NEEDED:
+- Fraud is rare (~10% of labeled data)
+- Imbalanced classes lead to biased models
+- We undersample to create balanced training set
 
-Stage 6: MODEL TRAINING
-├── SVM with precomputed kernel
-├── Grid search over C values
-└── Select best model
+def draw_sample(df, n_fraud, n_legit, test_frac=0.2, seed=123):
+    """
+    Sample balanced data and create train/test split.
+    """
+    # Sample from each class
+    fraud_samples = df[df['Class']==0].sample(n_fraud, random_state=seed*20+2)
+    legit_samples = df[df['Class']==1].sample(n_legit, random_state=seed*46+9)
+    balanced_data = pd.concat([fraud_samples, legit_samples])
 
-Stage 7: EVALUATION
-├── Predict on test set
-├── Compute metrics (Accuracy, Precision, Recall, F1, AUC)
-└── Compare with RBF baseline
-
-Stage 8: DEPLOYMENT
-├── Save model (.pkl)
-├── Save scaler (.pkl)
-└── Production inference
-```
-
-## 6.2 Data Preprocessing Details
-
-### 6.2.1 Preprocessing Pipeline
-
-**Step 1: Quantile Transform**
-```
-x' = Φ⁻¹(F(x))
-```
-Maps data to Gaussian distribution, handles outliers.
-
-**Step 2: Standardization**
-```
-x'' = (x' - μ) / σ
-```
-Zero mean, unit variance.
-
-**Step 3: MinMax Scaling**
-```
-x''' = a + (x'' - min(x''))(b - a) / (max(x'') - min(x''))
-```
-Scale to [a, b] = [-π, π] or [-π/4, π/4].
-
-### 6.2.2 Scaling Range Selection
-
-| Qubits | Recommended Range |
-|--------|-------------------|
-| n < 10 | [-π, π] |
-| 10 ≤ n < 20 | [-π/2, π/2] |
-| n ≥ 20 | [-π/4, π/4] |
-
-### 6.2.3 Class Balancing
-
-```python
-def draw_sample(df, ndmin, ndmaj, test_frac=0.2, seed=123):
-    # Stratified sampling from each class
-    data_reduced = pd.concat([
-        df[df['Class']==0].sample(ndmin, random_state=seed*20+2),
-        df[df['Class']==1].sample(ndmaj, random_state=seed*46+9)
-    ])
-
-    # Stratified train/test split
-    train_df, test_df = train_test_split(
-        data_reduced,
-        stratify=data_reduced['Class'],
+    # Stratified split maintains class balance in both sets
+    from sklearn.model_selection import train_test_split
+    train, test = train_test_split(
+        balanced_data,
+        stratify=balanced_data['Class'],
         test_size=test_frac,
         random_state=seed*26+19
     )
+
     return train_features, train_labels, test_features, test_labels
-```
 
-## 6.3 Circuit Construction Flow
+# Example: 100 fraud + 100 legitimate samples
+train_X, train_y, test_X, test_y = draw_sample(data, 100, 100, 0.2, seed=456)
 
-```
-Classical Feature Vector x = [x₁, x₂, ..., xₙ]
-                           │
-                           ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│              CREATE SYMBOLIC CIRCUIT (pytket)                              │
-│                                                                            │
-│    Symbols: f_0, f_1, ..., f_{n-1}                                        │
-│                                                                            │
-│    ┌───┐                                                                   │
-│    │ H │ on all qubits (initialization)                                   │
-│    └───┘                                                                   │
-│         │  × r repetitions                                                 │
-│    ┌──────────────┐                                                        │
-│    │ Rz(γ·fᵢ/π)  │ on each qubit i                                       │
-│    └──────────────┘                                                        │
-│    ┌──────────────────────────────┐                                        │
-│    │ XXPhase(γ²(1-fᵢ)(1-fⱼ))    │ on entangled pairs (i,j)               │
-│    └──────────────────────────────┘                                        │
-└────────────────────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│              SYMBOL SUBSTITUTION                                           │
-│    symbol_map = {f_0: x₁, f_1: x₂, ..., f_{n-1}: xₙ}                     │
-│    circuit.symbol_substitution(symbol_map)                                │
-└────────────────────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│              CIRCUIT COMPILATION (pytket)                                  │
-│    • Map to linear architecture                                           │
-│    • Decompose BRIDGE gates (for non-adjacent qubits)                     │
-│    • Insert SWAPs as needed                                               │
-└────────────────────────────────────────────────────────────────────────────┘
-                           │
-                           ▼
-┌────────────────────────────────────────────────────────────────────────────┐
-│              SERIALIZE TO GATE LIST                                        │
-│    Output: [(0, 0, -1, 0), (0, 1, -1, 0), (2, 0, -1, θ₀), ...]           │
-└────────────────────────────────────────────────────────────────────────────┘
-```
+───────────────────────────────────────────────────────────────────────────────
+STEP 3: Feature Scaling (Critical for Quantum Encoding!)
+───────────────────────────────────────────────────────────────────────────────
 
-## 6.4 MPI Parallelization Strategy
+WHY EACH STEP IS NEEDED:
 
-### 6.4.1 Data Distribution
+A) QUANTILE TRANSFORM:
+   - Maps data to Gaussian distribution
+   - Handles outliers (fraud amounts can be extreme)
+   - Preserves rank ordering
 
-```
-Data X = [x₁, x₂, ..., xₙ] distributed across P processes:
+   from sklearn.preprocessing import QuantileTransformer
+   qt = QuantileTransformer(output_distribution='normal')
+   X_qt = qt.fit_transform(X)
 
-Process 0: [x₁, ..., x_{N/P}]         → Chunk X₀
-Process 1: [x_{N/P+1}, ..., x_{2N/P}] → Chunk X₁
-...
-Process P-1: [x_{(P-1)N/P+1}, ..., xₙ] → Chunk X_{P-1}
-```
+   # Before: [0.01, 0.5, 1000000]  (outlier!)
+   # After:  [-2.3, 0.0, 2.3]       (normalized)
 
-### 6.4.2 Round Robin Communication
+B) STANDARD SCALER:
+   - Zero mean, unit variance
+   - Makes features comparable in scale
 
-```
-Iteration 0:                    Iteration 1:
-┌─────┐  ┌─────┐  ┌─────┐      ┌─────┐  ┌─────┐  ┌─────┐
-│ P0  │  │ P1  │  │ P2  │      │ P0  │  │ P1  │  │ P2  │
-│ Y0  │  │ Y1  │  │ Y2  │  →   │ Y2  │  │ Y0  │  │ Y1  │
-└─────┘  └─────┘  └─────┘      └─────┘  └─────┘  └─────┘
-   ↓        ↓        ↓            ↓        ↓        ↓
-Compute  Compute  Compute      Compute  Compute  Compute
-K[0,0]   K[1,1]   K[2,2]       K[0,2]   K[1,0]   K[2,1]
+   from sklearn.preprocessing import StandardScaler
+   ss = StandardScaler()
+   X_ss = ss.fit_transform(X_qt)
 
-Final: MPI_Reduce to sum all partial kernel matrices
-```
+   # Result: mean=0, std=1 for each feature
 
-### 6.4.3 Symmetry Exploitation
+C) MINMAX SCALER TO [-π, π] or [-π/4, π/4]:
+   - Maps to quantum rotation range
+   - CRITICAL: Quantum rotations are periodic with period 2π
+   - Using [-π/4, π/4] for many qubits prevents over-rotation
 
-For training kernel (X = Y), K_ij = K_ji:
-- Only compute upper triangle
-- Copy to lower triangle
-- Reduces computation by ~50%
+   from sklearn.preprocessing import MinMaxScaler
 
-### 6.4.4 Checkpointing
+   # For few qubits (n < 10): Full range
+   mms = MinMaxScaler(feature_range=(-np.pi, np.pi))
 
-```python
-if minutes_per_checkpoint is not None:
-    if last_checkpoint_time + 60*minutes_per_checkpoint < MPI.Wtime():
-        np.save(checkpoint_file, kernel_mat)
-        last_checkpoint_time = MPI.Wtime()
-```
+   # For many qubits (n > 20): Restricted range
+   mms = MinMaxScaler(feature_range=(-np.pi/4, np.pi/4))
 
-## 6.5 Output Artifacts
+   X_final = mms.fit_transform(X_ss)
 
-| Artifact | Location | Description |
-|----------|----------|-------------|
-| Training Kernel | `kernels/TrainKernel_*.npy` | N×N kernel matrix |
-| Test Kernel | `kernels/TestKernel_*.npy` | M×N kernel matrix |
-| Profiling Data | `*.json` | Performance metrics |
-| Checkpoints | `tmp/checkpoint_*.npy` | Recovery files |
-| Trained Model | `model/*.pkl` | Serialized classifier |
-| Feature Arrays | `pqf_arr/*.npy` | Quantum features |
-| Results | `Result_*.csv` | Predictions and metrics |
+───────────────────────────────────────────────────────────────────────────────
+STEP 4: Feature Selection
+───────────────────────────────────────────────────────────────────────────────
 
----
+WHY NEEDED:
+- Number of qubits = Number of features
+- More qubits = slower simulation, more entanglement
+- Select most informative features
 
-# 7. Implementation Reference
+# Simple approach: Take first k features (Elliptic features are pre-ordered)
+num_features = 12  # = number of qubits
+X_selected = X_final[:, :num_features]
 
-## 7.1 Core Classes
+# Alternative: Use feature importance
+from sklearn.ensemble import RandomForestClassifier
+rf = RandomForestClassifier(n_estimators=100)
+rf.fit(X_final, y)
+top_features = np.argsort(rf.feature_importances_)[::-1][:num_features]
+X_selected = X_final[:, top_features]
+{code}
 
-### 7.1.1 ProjectedKernelStateAnsatz
+h2. 6.2 Stage 2: Quantum Circuit Construction
 
-**Location:** `projected_kernel_ansatz.py`
+{code:title=Circuit Construction Code}
+═══════════════════════════════════════════════════════════════════════════════
+                         CIRCUIT CONSTRUCTION
+═══════════════════════════════════════════════════════════════════════════════
 
-```python
+from pytket import Circuit, OpType
+from sympy import Symbol
+
 class ProjectedKernelStateAnsatz:
-    """
-    Creates parameterized quantum circuits for projected kernel computation.
+    def __init__(self, num_features, reps, gamma, entanglement_map,
+                 ansatz="hamiltonian", hadamard_init=True):
+        """
+        Initialize the quantum feature map.
 
-    Attributes:
-        ansatz_circ (Circuit): The pytket circuit with symbolic parameters
-        feature_symbol_list (List[Symbol]): Symbols f_0, f_1, ..., f_{n-1}
-        reps (int): Number of circuit layer repetitions
-        gamma (float): Rotation scaling parameter
-        num_features (int): Number of qubits/features
-        hadamard_init (bool): Whether to apply initial Hadamard layer
-        entanglement_map (List[Tuple[int, int]]): Qubit connectivity
+        Parameters:
+        -----------
+        num_features : int
+            Number of features = number of qubits
+        reps : int
+            Number of layer repetitions (2-10 typical)
+        gamma : float
+            Rotation scaling (0.1-1.0)
+        entanglement_map : list of tuples
+            Pairs of qubits to entangle [(0,1), (1,2), ...]
+        ansatz : str
+            "hamiltonian" or "magic"
+        hadamard_init : bool
+            Whether to apply H gates initially
+        """
+        self.num_features = num_features
+        self.reps = reps
+        self.gamma = gamma
+
+        # Create symbolic circuit (parameters will be substituted later)
+        self.ansatz_circ = Circuit(num_features)
+
+        # Create symbols for each feature
+        self.feature_symbols = [Symbol(f'f_{i}') for i in range(num_features)]
+
+        # Build the circuit
+        if ansatz == "hamiltonian":
+            self._build_hamiltonian_ansatz()
+        elif ansatz == "magic":
+            self._build_magic_ansatz()
+
+    def _build_hamiltonian_ansatz(self):
+        """Build Rz + XXPhase circuit."""
+
+        # Initial Hadamard layer
+        if self.hadamard_init:
+            for i in range(self.num_features):
+                self.ansatz_circ.H(i)
+
+        # Repeated layers
+        for _ in range(self.reps):
+            # Single-qubit Rz rotations (encode features)
+            for i in range(self.num_features):
+                # Rotation angle = γ * x_i / π
+                angle = (self.gamma / np.pi) * self.feature_symbols[i]
+                self.ansatz_circ.Rz(angle, i)
+
+            # Two-qubit XXPhase gates (create entanglement)
+            for (q0, q1) in self.entanglement_map:
+                # Rotation angle = γ² * (1 - x_i) * (1 - x_j)
+                s0 = self.feature_symbols[q0]
+                s1 = self.feature_symbols[q1]
+                angle = self.gamma**2 * (1 - s0) * (1 - s1)
+                self.ansatz_circ.XXPhase(angle, q0, q1)
+
+        # Compile to linear architecture (insert SWAPs if needed)
+        self._compile_circuit()
+
+    def circuit_for_data(self, feature_values):
+        """
+        Create concrete circuit for specific data point.
+
+        Parameters:
+        -----------
+        feature_values : array-like
+            The scaled feature vector [x_1, x_2, ..., x_n]
+
+        Returns:
+        --------
+        Circuit with all symbols replaced by values
+        """
+        # Create symbol → value mapping
+        symbol_map = {
+            sym: val
+            for sym, val in zip(self.feature_symbols, feature_values)
+        }
+
+        # Copy circuit and substitute values
+        concrete_circuit = self.ansatz_circ.copy()
+        concrete_circuit.symbol_substitution(symbol_map)
+
+        return concrete_circuit
+
+    def circuit_to_list(self, circuit):
+        """
+        Convert circuit to gate list for ITensor.
+
+        Returns:
+        --------
+        List of [gate_type, qubit1, qubit2, angle]
+        """
+        gates = []
+        for cmd in circuit.get_commands():
+            op_type = cmd.op.type
+            q1 = cmd.qubits[0].index[0]
+            q2 = cmd.qubits[1].index[0] if len(cmd.qubits) > 1 else -1
+            angle = cmd.op.params[0] if cmd.op.params else 0
+
+            # Map pytket gate types to our codes
+            gate_codes = {
+                OpType.H: 0,
+                OpType.Rx: 1,
+                OpType.Rz: 2,
+                OpType.XXPhase: 3,
+                OpType.ZZPhase: 4,
+                OpType.SWAP: 5,
+                OpType.T: 6,
+                OpType.CZ: 7
+            }
+
+            gates.append([gate_codes[op_type], q1, q2, float(angle)])
+
+        return gates
+{code}
+
+h2. 6.3 Stage 3: Kernel Matrix Construction
+
+{code:title=Kernel Matrix Construction with MPI}
+═══════════════════════════════════════════════════════════════════════════════
+                    PARALLEL KERNEL MATRIX CONSTRUCTION
+═══════════════════════════════════════════════════════════════════════════════
+
+from mpi4py import MPI
+import numpy as np
+from helloitensor import circuit_xyz_exp
+
+def build_kernel_matrix(mpi_comm, ansatz, X, Y=None, alpha=1.0):
+    """
+    Build the projected quantum kernel matrix using MPI parallelization.
+
+    Parameters:
+    -----------
+    mpi_comm : MPI communicator
+        MPI.COMM_WORLD typically
+    ansatz : ProjectedKernelStateAnsatz
+        The quantum circuit template
+    X : ndarray of shape (N, d)
+        Training data
+    Y : ndarray of shape (M, d), optional
+        Test data. If None, compute K(X, X)
+    alpha : float
+        Kernel bandwidth parameter
+
+    Returns:
+    --------
+    Kernel matrix of shape (N, N) or (M, N)
     """
 
-    def __init__(
-        self,
-        num_features: int,       # Number of qubits = features
-        reps: int,               # Layer repetitions
-        gamma: float,            # Rotation scaling [0.1, 1.0]
-        entanglement_map: List[Tuple[int, int]],
-        ansatz: str,             # "hamiltonian" or "magic"
-        hadamard_init: bool = True
+    # MPI setup
+    rank = mpi_comm.Get_rank()      # This process's ID
+    n_procs = mpi_comm.Get_size()   # Total number of processes
+    root = 0                         # Master process
+
+    n_qubits = ansatz.num_features
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # PHASE 1: Distribute data and simulate circuits
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # Each process handles a chunk of X
+    entries_per_chunk = int(np.ceil(len(X) / n_procs))
+
+    # Compute quantum features for this process's chunk
+    my_features_X = []
+    for i in range(entries_per_chunk):
+        global_idx = rank * entries_per_chunk + i
+        if global_idx < len(X):
+            # Build circuit for this data point
+            circuit = ansatz.circuit_for_data(X[global_idx])
+            gate_list = ansatz.circuit_to_list(circuit)
+
+            # Simulate and get expectation values
+            exp_vals = circuit_xyz_exp(gate_list, n_qubits)
+            # exp_vals = [[<X1>, <Y1>, <Z1>], [<X2>, <Y2>, <Z2>], ...]
+
+            my_features_X.append(np.array(exp_vals).flatten())
+
+    # Similarly for Y if provided
+    if Y is not None:
+        my_features_Y = []  # Compute for Y chunk
+        # ... similar code ...
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # PHASE 2: Round-robin kernel computation
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # Initialize local kernel matrix contribution
+    if Y is None:
+        kernel_local = np.zeros((len(X), len(X)))
+    else:
+        kernel_local = np.zeros((len(Y), len(X)))
+
+    # Round-robin: rotate Y features among processes
+    for iteration in range(n_procs):
+        # Current Y chunk on this process
+        y_chunk_idx = (rank + iteration) % n_procs
+
+        # Compute kernel entries for this tile
+        for i, phi_x in enumerate(my_features_X):
+            x_idx = rank * entries_per_chunk + i
+
+            for j, phi_y in enumerate(current_y_chunk):
+                y_idx = y_chunk_idx * entries_per_chunk + j
+
+                # PQK kernel formula
+                distance_sq = np.sum((phi_x - phi_y)**2)
+                kernel_entry = np.exp(-alpha * distance_sq)
+
+                kernel_local[y_idx, x_idx] = kernel_entry
+
+        # Pass Y chunk to next process in ring
+        current_y_chunk = mpi_comm.sendrecv(
+            current_y_chunk,
+            dest=(rank - 1) % n_procs
+        )
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # PHASE 3: Gather results at root
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # Sum all local contributions
+    kernel_matrix = mpi_comm.reduce(kernel_local, op=MPI.SUM, root=root)
+
+    return kernel_matrix
+
+# ═══════════════════════════════════════════════════════════════════════════
+# USAGE EXAMPLE
+# ═══════════════════════════════════════════════════════════════════════════
+
+mpi_comm = MPI.COMM_WORLD
+
+# Create ansatz
+entanglement_map = entanglement_graph(num_features, 1)
+ansatz = ProjectedKernelStateAnsatz(
+    num_features=12,
+    reps=10,
+    gamma=1.0,
+    entanglement_map=entanglement_map,
+    ansatz="hamiltonian"
+)
+
+# Build kernel matrices
+K_train = build_kernel_matrix(mpi_comm, ansatz, X_train, alpha=0.5)
+K_test = build_kernel_matrix(mpi_comm, ansatz, X_train, Y=X_test, alpha=0.5)
+{code}
+
+h2. 6.4 Stage 4: Model Training and Evaluation
+
+{code:title=Model Training Code}
+═══════════════════════════════════════════════════════════════════════════════
+                         MODEL TRAINING AND EVALUATION
+═══════════════════════════════════════════════════════════════════════════════
+
+from sklearn.svm import SVC
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SVM WITH PRECOMPUTED KERNEL
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Grid search over regularization parameter C
+C_values = [2, 1.5, 1, 0.5, 0.1, 0.05, 0.01]
+best_f1 = 0
+best_model = None
+
+for C in C_values:
+    # Train SVM with our precomputed kernel
+    svm = SVC(
+        kernel="precomputed",  # Use our kernel matrix directly
+        C=C,                   # Regularization parameter
+        tol=1e-5,              # Convergence tolerance
+        class_weight='balanced'  # Handle any remaining imbalance
     )
 
-    def circuit_for_data(self, feature_values: List[float]) -> Circuit
-    def circuit_to_list(self, circuit: Circuit) -> List[List]
-    def hamiltonian_ansatz(self) -> int
-    def magic_ansatz(self) -> int
-```
+    # Fit on training kernel
+    svm.fit(K_train, train_labels)
 
-### 7.1.2 Key Functions
+    # Predict on test kernel
+    predictions = svm.predict(K_test)
 
-**build_kernel_matrix:**
-```python
-def build_kernel_matrix(
-    mpi_comm,                          # MPI communicator
-    ansatz: ProjectedKernelStateAnsatz,
-    X: np.ndarray,                     # Data matrix (N, d)
-    Y: Optional[np.ndarray] = None,    # Optional second dataset
-    alpha: float = 1,                  # Kernel bandwidth
-    info_file: Optional[str] = None,   # Profiling output file
-    cpu_max_mem: int = 6,              # Memory limit (GB)
-    minutes_per_checkpoint: Optional[int] = None
-) -> np.ndarray
-```
+    # Evaluate
+    f1 = f1_score(test_labels, predictions)
 
-**entanglement_graph:**
-```python
-def entanglement_graph(nq: int, nn: int) -> List[Tuple[int, int]]
-# Example: entanglement_graph(5, 1) -> [(0,1), (2,3), (1,2), (3,4)]
-```
+    if f1 > best_f1:
+        best_f1 = f1
+        best_model = svm
+        best_C = C
 
-## 7.2 Parameter Reference
+# ═══════════════════════════════════════════════════════════════════════════
+# COMPUTE ALL METRICS
+# ═══════════════════════════════════════════════════════════════════════════
 
-### 7.2.1 Quantum Circuit Parameters
+predictions = best_model.predict(K_test)
 
-| Parameter | Symbol | Type | Range | Default | Description |
-|-----------|--------|------|-------|---------|-------------|
-| `num_features` | n | int | [2, 100+] | - | Number of qubits/features |
-| `reps` | r | int | [1, 20] | 2 | Circuit layer repetitions |
-| `gamma` | γ | float | (0, 1] | 1.0 | Rotation scaling factor |
-| `alpha` | α | float | (0, 10] | 1.0 | Kernel bandwidth |
-| `ansatz` | - | str | {"hamiltonian", "magic"} | "hamiltonian" | Circuit type |
-| `hadamard_init` | - | bool | {True, False} | True | Initial H gates |
-
-### 7.2.2 Data Parameters
-
-| Parameter | Type | Range | Description |
-|-----------|------|-------|-------------|
-| `n_illicit` | int | [1, N/2] | Fraud class sample size |
-| `n_licit` | int | [1, N/2] | Legitimate class sample size |
-| `data_seed` | int | Any | Random seed for reproducibility |
-| `test_frac` | float | (0, 1) | Test set fraction (default 0.2) |
-
-### 7.2.3 SVM Parameters
-
-| Parameter | Type | Values | Description |
-|-----------|------|--------|-------------|
-| `C` | float | [0.01, 2.0] | Regularization parameter |
-| `kernel` | str | "precomputed" | Must be precomputed for PQK |
-| `tol` | float | 1e-5 | Optimization tolerance |
-
-### 7.2.4 Parameter Guidelines
-
-| Scenario | Recommended Settings |
-|----------|---------------------|
-| Few features (n < 10) | γ=1.0, reps=2-3, α=0.5-1.0 |
-| Many features (n > 20) | γ=0.3-0.5, reps=5-10, α=0.1-0.5 |
-| Small data (N < 500) | Higher C (1.0-2.0), α=0.5-1.0 |
-| Large data (N > 5000) | Lower C (0.1-0.5), α=0.1-0.3 |
-
-## 7.3 Gate Encoding Specification
-
-| Code | Gate | Qubits | Parameter | ITensor Operator |
-|------|------|--------|-----------|------------------|
-| 0 | H | 1 | None | `"H"` |
-| 1 | Rx | 1 | angle | `"Rx"` with `alpha=angle` |
-| 2 | Rz | 1 | angle | `"Rz"` with `alpha=angle` |
-| 3 | XXPhase | 2 | angle | `expHermitian(X⊗X, -i*θ)` |
-| 4 | ZZPhase | 2 | angle | `expHermitian(Z⊗Z, -i*θ)` |
-| 5 | SWAP | 2 | None | Manual matrix |
-| 6 | T | 1 | None | `"T"` |
-| 7 | CZ | 2 | None | Manual matrix |
-
-**Gate List Format:**
-```python
-# [code, qubit1, qubit2, parameter]
-# qubit2 = -1 for single-qubit gates
-example_circuit = [
-    [0, 0, -1, 0],      # H on qubit 0
-    [0, 1, -1, 0],      # H on qubit 1
-    [2, 0, -1, 0.5],    # Rz(0.5) on qubit 0
-    [3, 0, 1, 0.25],    # XXPhase(0.25) on qubits 0,1
-]
-```
-
-## 7.4 File Format Specifications
-
-### 7.4.1 Input Data (CSV)
-
-```csv
-Class,Feature 1,Feature 2,...,Feature N
-0,1.234,5.678,...,9.012
-1,3.456,7.890,...,1.234
-```
-
-### 7.4.2 Kernel Matrix (NumPy)
-
-```python
-# Training kernel: Shape (N_train, N_train), dtype float64
-kernel_train = np.load("kernels/TrainKernel_Nf-12_r-10_g-1_Ntr-100.npy")
-
-# Test kernel: Shape (N_test, N_train)
-kernel_test = np.load("kernels/TestKernel_Nf-12_r-10_g-1_Ntr-100.npy")
-```
-
-**Filename Convention:**
-```
-{Type}Kernel_Nf-{num_features}_r-{reps}_g-{gamma}_Ntr-{n_train}.npy
-```
-
-### 7.4.3 Profiling JSON
-
-```json
-{
-    "lenX": [800, "entries"],
-    "lenY": [200, "entries"],
-    "r0_circ_gen": [1.23, "seconds"],
-    "r0_circ_sim": [45.67, "seconds"],
-    "avg_circ_sim": [0.0571, "seconds"],
-    "kernel_mat_time": [120.5, "seconds"],
-    "total_time": [180.3, "seconds"]
+results = {
+    'Accuracy': accuracy_score(test_labels, predictions),
+    'Precision': precision_score(test_labels, predictions, pos_label=0),
+    'Recall': recall_score(test_labels, predictions, pos_label=0),
+    'F1': f1_score(test_labels, predictions, pos_label=0),
+    'AUC': roc_auc_score(test_labels, predictions)
 }
-```
 
----
+print("═══════════════════════════════════════════════════")
+print("              MODEL EVALUATION RESULTS             ")
+print("═══════════════════════════════════════════════════")
+for metric, value in results.items():
+    print(f"{metric:15s}: {value:.4f}")
 
-# 8. Fraud Detection Application
+# ═══════════════════════════════════════════════════════════════════════════
+# COMPARE WITH CLASSICAL RBF BASELINE
+# ═══════════════════════════════════════════════════════════════════════════
 
-## 8.1 Problem Domain
+# Classical RBF SVM for comparison
+svm_rbf = SVC(kernel='rbf', C=best_C, gamma='scale')
+svm_rbf.fit(X_train_scaled, train_labels)
+rbf_predictions = svm_rbf.predict(X_test_scaled)
 
-### 8.1.1 Fraud Detection Challenges
+print("\n═══════════════════════════════════════════════════")
+print("         COMPARISON: PQK vs RBF Kernel             ")
+print("═══════════════════════════════════════════════════")
+print(f"PQK Accuracy:  {results['Accuracy']:.4f}")
+print(f"RBF Accuracy:  {accuracy_score(test_labels, rbf_predictions):.4f}")
+print(f"Improvement:   {results['Accuracy'] - accuracy_score(test_labels, rbf_predictions):.4f}")
+{code}
 
-| Challenge | Description | QiML Solution |
-|-----------|-------------|---------------|
-| Class Imbalance | Fraud < 5% of transactions | Balanced sampling |
-| High Dimensionality | Many features | Multi-qubit encoding |
-| Complex Patterns | Non-linear interactions | Quantum entanglement |
-| Adversarial Evolution | Fraudsters adapt | Kernel method robustness |
-| Real-time Requirements | Sub-second decisions | Inference optimization |
+----
 
-### 8.1.2 Binary Classification Formulation
+h1. 7. Parameter Reference Guide
 
-```
-y = { 0  (Fraud / Illicit)
-    { 1  (Legitimate / Licit)
-```
+h2. 7.1 Quantum Circuit Parameters
 
-## 8.2 The Elliptic Bitcoin Dataset
+||Parameter||Symbol||Type||Recommended Range||Effect||
+|num_features|n|int|5-50|More qubits = more expressive but slower|
+|reps|r|int|2-10|More reps = deeper circuit, more entanglement|
+|gamma|γ|float|0.1-1.0|Smaller for more qubits; controls rotation magnitude|
+|alpha|α|float|0.1-2.0|Kernel bandwidth; like γ in classical RBF|
+|ansatz|-|str|"hamiltonian"|Circuit type; hamiltonian recommended for continuous data|
 
-### 8.2.1 Dataset Statistics
+h2. 7.2 Parameter Selection Guidelines
 
-| Attribute | Value |
-|-----------|-------|
-| Total transactions | 203,769 |
-| Labeled transactions | 46,564 |
-| Unlabeled transactions | 157,205 |
-| Illicit (fraud) | 4,545 (9.8% of labeled) |
-| Licit (legitimate) | 42,019 (90.2% of labeled) |
-| Features per transaction | 166 |
-| Time steps | 49 |
+{code:title=Parameter Selection Decision Tree}
+HOW TO CHOOSE PARAMETERS:
 
-### 8.2.2 Feature Structure
+1. NUMBER OF FEATURES (num_features):
+   Start: 10-15
+   Increase if: Model underfits, need more expressiveness
+   Decrease if: Simulation too slow, overfitting
 
-**Local Features (94):** Transaction characteristics, aggregated from one-hop neighborhood
+2. CIRCUIT DEPTH (reps):
+   Start: 5
+   Increase if: Kernel values all close to 1 (underfitting)
+   Decrease if: Kernel values all close to 0 (overfitting to noise)
 
-**Aggregated Features (72):** Neighborhood statistics, graph structural features
+3. ROTATION SCALING (gamma):
+   Start: 1.0 for n < 10, 0.5 for n < 20, 0.3 for n ≥ 20
+   Increase if: Kernel values too uniform
+   Decrease if: Kernel values too variable
 
-### 8.2.3 Data Preprocessing
+4. KERNEL BANDWIDTH (alpha):
+   Start: 0.5
+   Increase if: Model too smooth (underfitting)
+   Decrease if: Model too sharp (overfitting)
 
-```python
-# Load raw data
-feature_data = pd.read_csv('elliptic_txs_features.csv')
-node_class = pd.read_csv('elliptic_txs_classes.csv')
+5. SVM REGULARIZATION (C):
+   Grid search: [0.01, 0.05, 0.1, 0.5, 1.0, 1.5, 2.0]
+   Higher C: More complex boundary, risk of overfitting
+   Lower C: Simpler boundary, risk of underfitting
+{code}
 
-# Encode labels: "1" = illicit → 0, "2" = licit → 1
-node_class.loc[node_class["Class"] == "1", "Class"] = 0
-node_class.loc[node_class["Class"] == "2", "Class"] = 1
+h2. 7.3 Common Configurations
 
-# Remove unlabeled data
-clean_data = feature_data.drop(np.where(node_class['Class']=='unknown')[0])
-```
+||Use Case||num_features||reps||gamma||alpha||C||
+|Quick test|8|2|1.0|0.5|1.0|
+|Balanced accuracy|12|5|1.0|0.5|0.5|
+|High precision|12|10|0.8|0.3|1.0|
+|Many features|20|10|0.3|0.1|0.1|
 
-## 8.3 Model Configuration
+----
 
-### 8.3.1 Recommended Hyperparameters
+h1. 8. Fraud Detection Specific Guidance
 
-```python
-# Feature selection
-num_features = 12      # 12-20 most important features
+h2. 8.1 The Elliptic Bitcoin Dataset
 
-# Circuit parameters
-reps = 10              # Deep circuit for complex patterns
-gamma = 1.0            # Full rotation scaling
+{code:title=Dataset Summary}
+ELLIPTIC BITCOIN DATASET
 
-# Kernel parameter
-alpha = 0.5            # Moderate bandwidth
+Source: Anti-money laundering research
+Type: Bitcoin transaction graph
+Task: Binary classification (fraud vs legitimate)
+
+STATISTICS:
+- Total transactions: 203,769
+- Labeled: 46,564 (23%)
+- Unlabeled: 157,205 (77%)
+- Fraud (Class 0): 4,545 (9.8% of labeled)
+- Legitimate (Class 1): 42,019 (90.2% of labeled)
+- Features: 166 per transaction
+- Time steps: 49
+
+FEATURES (166 total):
+- Local features (94): Transaction characteristics
+  - Input/output counts
+  - Transaction fees
+  - Value amounts
+
+- Aggregated features (72): Neighborhood statistics
+  - Mean/std of neighbor features
+  - Graph structure features
+{code}
+
+h2. 8.2 Recommended Configuration for Elliptic
+
+{code:title=Optimal Parameters for Elliptic Dataset}
+# Tested configuration achieving ~90% F1 score
 
 # Data parameters
-n_illicit = 100        # Balanced sampling
-n_licit = 100
-data_seed = 456
+n_fraud = 100       # Balanced sampling
+n_legit = 100
+test_frac = 0.2
+data_seed = 456     # For reproducibility
 
-# SVM regularization
-C_values = [2, 1.5, 1, 0.5, 0.1, 0.05, 0.01]
-```
+# Feature selection
+num_features = 12   # Top 12 features
 
-### 8.3.2 Hyperparameter Tuning Strategy
+# Circuit parameters
+reps = 10           # Deep circuit
+gamma = 1.0         # Full rotation range
+ansatz = "hamiltonian"
 
-**Phase 1: Coarse Grid**
-- num_features ∈ {8, 12, 16, 20}
-- reps ∈ {2, 5, 10}
-- gamma ∈ {0.5, 1.0}
-- alpha ∈ {0.1, 0.5, 1.0}
+# Kernel parameters
+alpha = 0.5
 
-**Phase 2: Fine-Tune**
-- gamma ∈ {0.8, 0.9, 1.0, 1.1}
-- alpha ∈ {0.3, 0.5, 0.7}
-- C ∈ {0.01, 0.05, 0.1, 0.5, 1.0, 1.5, 2.0}
+# SVM parameters
+C = 0.5             # Moderate regularization
+{code}
 
-**Phase 3: Validate**
-- Multiple seeds: {123, 456, 789, 101, 202}
-- Report mean ± std
+h2. 8.3 Evaluation Metrics for Fraud Detection
 
-## 8.4 Evaluation Metrics
+{code:title=Metrics Interpretation}
+FRAUD DETECTION METRICS GUIDE
 
-### 8.4.1 Primary Metrics
+For fraud detection, different metrics matter differently:
 
-| Metric | Formula | Target | Interpretation |
-|--------|---------|--------|----------------|
-| Recall | TP/(TP+FN) | > 0.80 | Fraud capture rate |
-| Precision | TP/(TP+FP) | > 0.70 | Alert reliability |
-| F1 Score | 2PR/(P+R) | > 0.75 | Balanced performance |
-| AUC-ROC | Area under ROC | > 0.85 | Discrimination ability |
+RECALL (Sensitivity, True Positive Rate):
+- Definition: TP / (TP + FN)
+- Meaning: What fraction of actual frauds did we catch?
+- Target: > 80%
+- Why important: Missing fraud means direct financial loss
 
-### 8.4.2 Confusion Matrix
+PRECISION (Positive Predictive Value):
+- Definition: TP / (TP + FP)
+- Meaning: What fraction of our fraud alerts are real fraud?
+- Target: > 70%
+- Why important: False alerts waste investigation resources
 
-```
+F1 SCORE:
+- Definition: 2 * (Precision * Recall) / (Precision + Recall)
+- Meaning: Harmonic mean of precision and recall
+- Target: > 75%
+- Why important: Balances both concerns
+
+AUC-ROC:
+- Definition: Area under Receiver Operating Characteristic curve
+- Meaning: Probability that random fraud ranks higher than random legitimate
+- Target: > 85%
+- Why important: Measures discrimination ability across all thresholds
+
+CONFUSION MATRIX INTERPRETATION:
                     Predicted
                   Fraud   Legit
               ┌─────────┬─────────┐
-Actual Fraud  │   TP    │   FN    │  → Recall = TP/(TP+FN)
-              │  (Hit)  │ (Miss)  │
+Actual Fraud  │   TP    │   FN    │  ← We want to minimize FN (costly!)
+              │ (Good!) │ (Bad!)  │
               ├─────────┼─────────┤
-Actual Legit  │   FP    │   TN    │  → Specificity = TN/(TN+FP)
-              │ (False  │(Correct │
-              │ Alarm)  │ Clear)  │
+Actual Legit  │   FP    │   TN    │  ← FP is annoying but not as costly
+              │(Annoying│ (Good!) │
               └─────────┴─────────┘
-                  ↓
-              Precision = TP/(TP+FP)
-```
+{code}
 
-### 8.4.3 Cost-Sensitive Analysis
+----
 
-| Error Type | Business Impact | Cost Ratio |
-|------------|-----------------|------------|
-| False Negative (Miss fraud) | Direct financial loss | 10-100x |
-| False Positive (Flag legitimate) | Customer friction | 1x |
+h1. 9. Deployment and Operations
 
-## 8.5 Expected Performance
+h2. 9.1 Running the Pipeline
 
-### 8.5.1 Benchmark Results
+{code:title=Command Line Usage}
+═══════════════════════════════════════════════════════════════════════════════
+                         RUNNING THE PIPELINE
+═══════════════════════════════════════════════════════════════════════════════
 
-| Model | Accuracy | Precision | Recall | F1 | AUC |
-|-------|----------|-----------|--------|-----|-----|
-| PQK-SVM (Hamiltonian) | 0.85-0.92 | 0.80-0.88 | 0.82-0.90 | 0.81-0.89 | 0.88-0.94 |
-| RBF-SVM (Baseline) | 0.82-0.88 | 0.75-0.85 | 0.78-0.86 | 0.77-0.85 | 0.84-0.90 |
-| LightGBM + QF | 0.88-0.94 | 0.85-0.92 | 0.85-0.91 | 0.85-0.91 | 0.90-0.96 |
-
-### 8.5.2 Computational Benchmarks
-
-| Configuration | Train Time | Inference | Memory |
-|---------------|------------|-----------|--------|
-| n=12, reps=10, N=200 | ~5 min | ~100 ms | ~500 MB |
-| n=20, reps=10, N=200 | ~15 min | ~200 ms | ~1 GB |
-| n=12, reps=10, N=1000 | ~2 hours | ~100 ms | ~2 GB |
-
----
-
-# 9. Deployment Guide
-
-## 9.1 Command-Line Usage
-
-### 9.1.1 Kernel Mode (SVM)
-
-```bash
-mpirun -n <nodes> python main.py \
+# Basic execution with MPI
+mpirun -n <num_processes> python main.py \
     <num_features> \
     <reps> \
     <gamma> \
@@ -1199,36 +1682,22 @@ mpirun -n <nodes> python main.py \
     <n_licit> \
     <data_seed> \
     <data_file>
-```
 
-**Example:**
-```bash
-mpirun -n 4 python main_dlp.py 12 10 1 0.5 100 100 456 bitstrings_12_preproc.csv
-```
+# Example: 4 processes, 12 features, 10 reps
+mpirun -n 4 python main.py 12 10 1 0.5 100 100 456 elliptic_preproc.csv
 
-### 9.1.2 Feature Mode (LightGBM)
+# On a cluster with job scheduler (SLURM example)
+srun --ntasks=16 --cpus-per-task=4 python main.py 12 10 1 0.5 100 100 456 data.csv
+{code}
 
-```bash
-mpirun -n <nodes> python main.py \
-    <method: train|test|generate> \
-    <train_data_info> \
-    <test_data_info> \
-    <target_label> \
-    <train_flag: True|False>
-```
+h2. 9.2 Docker Deployment
 
-## 9.2 Docker Deployment
-
-### 9.2.1 Build
-
-```bash
+{code:title=Docker Commands}
+# Build container
 cd Installation-Script
 docker build -t qiml .
-```
 
-### 9.2.2 Run
-
-```bash
+# Run with environment variables
 docker run \
    --env MPI_NODES=4 \
    --env NUM_FEATURES=12 \
@@ -1238,170 +1707,88 @@ docker run \
    --env N_ILLICIT=100 \
    --env N_LICIT=100 \
    --env DATA_SEED=456 \
-   --env DATA_FILE=bitstrings_12_preproc.csv \
+   --env DATA_FILE=elliptic_preproc.csv \
    qiml
-```
+{code}
 
-## 9.3 ITensor Setup
+h2. 9.3 Output Files
 
-### 9.3.1 Installation Steps
+||File||Location||Description||
+|Training kernel|kernels/TrainKernel_Nf-{n}_r-{r}_g-{γ}_Ntr-{N}.npy|N×N kernel matrix|
+|Test kernel|kernels/TestKernel_Nf-{n}_r-{r}_g-{γ}_Ntr-{N}.npy|M×N kernel matrix|
+|Profiling|{info_file}.json|Timing information|
+|Model|model/*.pkl|Trained classifier|
+|Scaler|model/scaler.pkl|Fitted data scaler|
 
-1. Install ITensor from https://itensor.org/docs.cgi?vers=cppv3&page=install
-2. Copy `qubit.h` to `~/itensor/itensor/mps/sites/`
-3. Add `#include "itensor/mps/sites/qubit.h"` to `~/itensor/itensor/all_mps.h`
-4. Compile shared library
+----
 
-### 9.3.2 Compilation Commands
+h1. 10. References and Further Reading
 
-**Linux (GCC):**
-```bash
-g++ -m64 -std=c++17 -fconcepts -fPIC -c \
-    -I. -I<pybind11_include> -I<itensor_path> \
-    -O2 -DNDEBUG -Wall -Wno-unknown-pragmas \
-    -o helloitensor.o helloitensor.cc \
-    -I<python_include>
+h2. 10.1 Core Papers
 
-g++ -m64 -shared -std=c++17 -fconcepts -fPIC \
-    helloitensor.o -o helloitensor.so \
-    -L<itensor_lib> -litensor -lpthread -lblas -llapack
-```
+# *Huang, H.-Y. et al.* (2021). "Power of data in quantum machine learning." _Nature Communications_, 12, 2631. [Link|https://www.nature.com/articles/s41467-021-22539-9]
+   - Introduced projected quantum kernels
+   - Theoretical foundation for our approach
 
-**macOS (Clang):**
-```bash
-clang++ -shared -undefined dynamic_lookup -std=c++17 -fPIC \
-    -Wno-gcc-compat -I<pybind11_include> -I<itensor_path> \
-    -O2 -DNDEBUG helloitensor.cc -o helloitensor.so \
-    -L<itensor_lib> -litensor -framework Accelerate \
-    -I<python_include>
-```
+# *Havlíček, V. et al.* (2019). "Supervised learning with quantum-enhanced feature spaces." _Nature_, 567, 209-212. [Link|https://www.nature.com/articles/s41586-019-0980-2]
+   - Original quantum feature map paper
+   - ZZ feature map design
 
-## 9.4 Production Architecture
+# *Fishman, M., White, S. R., & Stoudenmire, E. M.* (2022). "The ITensor Software Library." _SciPost Physics Codebases_, 4. [Link|https://scipost.org/SciPostPhysCodeb.4]
+   - ITensor library documentation
+   - MPS algorithms
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    PRODUCTION DEPLOYMENT ARCHITECTURE                       │
-└─────────────────────────────────────────────────────────────────────────────┘
+h2. 10.2 Fraud Detection Applications
 
-Transaction Stream
-        │
-        ▼
-┌─────────────────────┐
-│   Pre-Filter        │  Fast classical rules (< 1ms)
-└─────────────────────┘
-        │
-        ▼
-┌─────────────────────┐
-│   Classical Model   │  LightGBM screening (1-5ms)
-└─────────────────────┘
-        │ High-risk flagged
-        ▼
-┌─────────────────────┐
-│   QiML Model        │  Quantum-enhanced analysis (50-200ms)
-└─────────────────────┘
-        │
-        ▼
-    Approve / Block / Review
-```
+# *Heredge, J. et al.* (2023). "Quantum Multiple Kernel Learning in Financial Classification Tasks." [arXiv:2312.00260|https://arxiv.org/abs/2312.00260]
 
-## 9.5 Environment Variables
+# *Vasquez, A.C. et al.* (2023). "Financial Fraud Detection: A Comparative Study of Quantum Machine Learning Models." [arXiv:2308.05237|https://arxiv.org/abs/2308.05237]
 
-```bash
-# MPI Configuration
-NUM_NODES=4
-OMPI_ALLOW_RUN_AS_ROOT=1
+h2. 10.3 Additional Resources
 
-# OpenMP Configuration
-OMP_NUM_THREADS=24
-OMP_PROC_BIND=close
-OMP_PLACES=cores
+- [ITensor Documentation|https://itensor.org/docs.cgi]
+- [pytket Documentation|https://tket.quantinuum.com/api-docs/]
+- [PennyLane Kernel Tutorial|https://pennylane.ai/qml/demos/tutorial_kernel_based_training]
 
-# ITensor Configuration
-ITENSOR_USE_OMP=1
-MKL_NUM_THREADS=4
-OPENBLAS_NUM_THREADS=4
+----
 
-# Memory Optimization
-OMP_STACKSIZE=2M
-```
+h1. Appendix A: Quick Reference
 
----
+h2. A.1 Key Formulas
 
-# 10. References
+{code:title=Essential Equations}
+PROJECTED QUANTUM KERNEL:
+k(x, x') = exp(-α × Σᵢ [(⟨Xᵢ⟩ˣ - ⟨Xᵢ⟩ˣ')² + (⟨Yᵢ⟩ˣ - ⟨Yᵢ⟩ˣ')² + (⟨Zᵢ⟩ˣ - ⟨Zᵢ⟩ˣ')²])
 
-## 10.1 Core Papers
+HAMILTONIAN ANSATZ:
+U(x) = H⊗ⁿ × ∏ᵣ [∏ᵢ Rz(γxᵢ/π) × ∏_{(i,j)} R_XX(γ²(1-xᵢ)(1-xⱼ))]
 
-1. **Huang, H.-Y. et al.** (2021). "Power of data in quantum machine learning." *Nature Communications*, 12, 2631. https://www.nature.com/articles/s41467-021-22539-9
+FEATURE VECTOR:
+Φ(x) = [⟨X₁⟩, ⟨Y₁⟩, ⟨Z₁⟩, ..., ⟨Xₙ⟩, ⟨Yₙ⟩, ⟨Zₙ⟩] ∈ ℝ³ⁿ
+{code}
 
-2. **Havlíček, V. et al.** (2019). "Supervised learning with quantum-enhanced feature spaces." *Nature*, 567, 209-212. https://www.nature.com/articles/s41586-019-0980-2
+h2. A.2 Parameter Quick Guide
 
-3. **Kübler, J. M., Buchholz, S., & Schölkopf, B.** (2021). "The Inductive Bias of Quantum Kernels." *NeurIPS 2021*.
+||Parameter||Quick Setting||
+|num_features|12|
+|reps|10|
+|gamma|1.0|
+|alpha|0.5|
+|C|0.5|
 
-4. **Fishman, M., White, S. R., & Stoudenmire, E. M.** (2022). "The ITensor Software Library for Tensor Network Calculations." *SciPost Physics Codebases*, 4. https://scipost.org/SciPostPhysCodeb.4
+h2. A.3 Expected Performance
 
-## 10.2 Fraud Detection Applications
+||Metric||Target||
+|Accuracy|85-92%|
+|Recall|82-90%|
+|F1 Score|81-89%|
+|Inference|<200ms|
 
-5. **Heredge, J. et al.** (2023). "Quantum Multiple Kernel Learning in Financial Classification Tasks." arXiv:2312.00260. https://arxiv.org/abs/2312.00260
+----
 
-6. **Vasquez, A. C. et al.** (2023). "Financial Fraud Detection: A Comparative Study of Quantum Machine Learning Models." arXiv:2308.05237. https://arxiv.org/abs/2308.05237
-
-7. **Weber, M. et al.** (2019). "Anti-Money Laundering in Bitcoin: Experimenting with Graph Convolutional Networks for Financial Forensics." *SIGKDD Workshop on Anomaly Detection in Finance*.
-
-## 10.3 Additional Resources
-
-8. **IBM Qiskit Documentation** - ZZFeatureMap. https://docs.quantum.ibm.com/api/qiskit/qiskit.circuit.library.ZZFeatureMap
-
-9. **PennyLane** - Kernel-based training of quantum models. https://pennylane.ai/qml/demos/tutorial_kernel_based_training
-
-10. **ITensor Documentation** - https://itensor.org/docs.cgi
-
----
-
-# Appendix A: Quick Reference Card
-
-## A.1 Command Line
-
-```bash
-# Kernel mode
-mpirun -n 4 python main.py 12 10 1 0.5 100 100 456 data.csv
-
-# Docker
-docker build -t qiml . && docker run --env NUM_NODES=4 qiml
-```
-
-## A.2 Key Parameters
-
-| Parameter | Typical Value | Description |
-|-----------|---------------|-------------|
-| num_features | 12 | Qubits/features |
-| reps | 10 | Circuit depth |
-| gamma | 1.0 | Rotation scaling |
-| alpha | 0.5 | Kernel bandwidth |
-| C | 0.1-1.0 | SVM regularization |
-
-## A.3 Key Formulas
-
-**PQK Kernel:**
-```
-k(x,x') = exp(-α Σᵢ 2[(⟨Xᵢ⟩ˣ-⟨Xᵢ⟩ˣ')² + (⟨Yᵢ⟩ˣ-⟨Yᵢ⟩ˣ')² + (⟨Zᵢ⟩ˣ-⟨Zᵢ⟩ˣ')²])
-```
-
-**Hamiltonian Ansatz:**
-```
-U(x) = H^⊗n ∏ᵣ [ ∏ᵢ Rz(γxᵢ/π) ∏_{(i,j)} R_XX(γ²(1-xᵢ)(1-xⱼ)) ]
-```
-
-## A.4 Expected Performance
-
-| Metric | Target |
-|--------|--------|
-| Accuracy | 85-92% |
-| Recall | 82-90% |
-| F1 Score | 81-89% |
-| AUC | 88-94% |
-| Inference | <200ms |
-
----
-
-**End of Document**
-
-*Document Version 1.0 | January 2026 | Enterprise Quantum Engineering Team*
+{panel:title=Document Information|borderStyle=solid|borderColor=#ccc|titleBGColor=#f0f0f0}
+*Version:* 1.0
+*Last Updated:* January 2026
+*Authors:* Enterprise Quantum Engineering Team
+*Classification:* Internal Technical Documentation
+{panel}
