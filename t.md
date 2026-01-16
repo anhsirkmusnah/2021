@@ -1,60 +1,93 @@
-h1. Quantum-Inspired Machine Learning (QiML) Platform
-h2. Projected Quantum Kernels for Financial Fraud Detection - Complete Technical Documentation
-
-{toc:printable=true|style=square|maxLevel=3|indent=20px|minLevel=1|class=bigpink|exclude=[1]}
-
-----
-
-h1. 1. Executive Summary
-
-h2. 1.1 What is This Project?
-
-This platform implements *Quantum-Inspired Machine Learning (QiML)* for binary classification, specifically designed for *financial fraud detection*.
-
-*For ML practitioners:* Think of this as a sophisticated feature engineering pipeline that:
-# Takes your classical tabular data (like transaction features)
-# Passes it through a "quantum circuit" simulation
-# Extracts new features that capture complex non-linear relationships
-# Uses these features in a kernel-based SVM classifier
-
-*The key insight:* We're not running on actual quantum hardware. Instead, we simulate quantum circuits on classical computers using efficient tensor network methods. This gives us the mathematical benefits of quantum feature spaces without needing quantum hardware.
-
-h2. 1.2 Why Quantum-Inspired ML?
-
-{panel:title=The Core Problem|borderStyle=solid|borderColor=#ccc|titleBGColor=#f0f0f0}
-In fraud detection, we often have:
-* High-dimensional data with complex feature interactions
-* Non-linear decision boundaries that simple models miss
-* Need for robust models that don't overfit
-
-Traditional approaches like RBF kernels work well, but quantum-inspired kernels can capture *different types of non-linear relationships* through quantum mechanical principles.
-{panel}
-
-h2. 1.3 Key Results
-
-||Metric||PQK-SVM (Our Method)||RBF-SVM (Baseline)||Improvement||
-|Accuracy|85-92%|82-88%|+3-4%|
-|Recall (Fraud Detection)|82-90%|78-86%|+4-5%|
-|F1 Score|81-89%|77-85%|+4-5%|
-|AUC-ROC|88-94%|84-90%|+4%|
-
-----
-
-h1. 2. Understanding Quantum Computing Basics (For ML Practitioners)
-
-{note:title=Why This Section Matters}
-Before diving into the implementation, you need to understand the quantum concepts we're borrowing. Don't worry - we'll explain everything using analogies to concepts you already know from ML.
-{note}
-
-h2. 2.1 What is a Qubit? (The Quantum Version of a Bit)
-
-h3. 2.1.1 Classical Bits vs Qubits
-
-*Classical bit:* Can be either 0 or 1. That's it.
-
-*Qubit:* Can be in a "superposition" - a combination of 0 and 1 simultaneously.
-
-{code:title=Mathematical Representation}
+<div>
+<h1>Quantum-Inspired Machine Learning (QiML) Platform</h1>
+<h2>Projected Quantum Kernels for Financial Fraud Detection - Complete Technical Documentation</h2>
+<ac:structured-macro ac:name="toc">
+  <ac:parameter ac:name="printable">true</ac:parameter>
+  <ac:parameter ac:name="style">square</ac:parameter>
+  <ac:parameter ac:name="maxLevel">3</ac:parameter>
+  <ac:parameter ac:name="indent">20px</ac:parameter>
+  <ac:parameter ac:name="minLevel">1</ac:parameter>
+  <ac:parameter ac:name="class">bigpink</ac:parameter>
+  <ac:parameter ac:name="exclude">[1]</ac:parameter>
+</ac:structured-macro>
+<hr />
+<h1>1. Executive Summary</h1>
+<h2>1.1 What is This Project?</h2>
+<p>This platform implements <strong>Quantum-Inspired Machine Learning (QiML)</strong> for binary classification, specifically designed for <strong>financial fraud detection</strong>.</p>
+<p><strong>For ML practitioners:</strong> Think of this as a sophisticated feature engineering pipeline that:</p>
+<ol>
+  <li>Takes your classical tabular data (like transaction features)</li>
+  <li>Passes it through a &quot;quantum circuit&quot; simulation</li>
+  <li>Extracts new features that capture complex non-linear relationships</li>
+  <li>Uses these features in a kernel-based SVM classifier</li>
+</ol>
+<p><strong>The key insight:</strong> We&#x27;re not running on actual quantum hardware. Instead, we simulate quantum circuits on classical computers using efficient tensor network methods. This gives us the mathematical benefits of quantum feature spaces without needing quantum hardware.</p>
+<h2>1.2 Why Quantum-Inspired ML?</h2>
+<ac:structured-macro ac:name="panel">
+  <ac:parameter ac:name="title">The Core Problem</ac:parameter>
+  <ac:parameter ac:name="borderStyle">solid</ac:parameter>
+  <ac:parameter ac:name="borderColor">#ccc</ac:parameter>
+  <ac:parameter ac:name="titleBGColor">#f0f0f0</ac:parameter>
+  <ac:rich-text-body>
+<p>In fraud detection, we often have:</p>
+<ul>
+  <li>High-dimensional data with complex feature interactions</li>
+  <li>Non-linear decision boundaries that simple models miss</li>
+  <li>Need for robust models that don&#x27;t overfit</li>
+</ul>
+<p>Traditional approaches like RBF kernels work well, but quantum-inspired kernels can capture <strong>different types of non-linear relationships</strong> through quantum mechanical principles.</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+<h2>1.3 Key Results</h2>
+<table>
+  <tbody>
+    <tr>
+      <th>Metric</th>
+      <th>PQK-SVM (Our Method)</th>
+      <th>RBF-SVM (Baseline)</th>
+      <th>Improvement</th>
+    </tr>
+    <tr>
+      <td>Accuracy</td>
+      <td>85-92%</td>
+      <td>82-88%</td>
+      <td>+3-4%</td>
+    </tr>
+    <tr>
+      <td>Recall (Fraud Detection)</td>
+      <td>82-90%</td>
+      <td>78-86%</td>
+      <td>+4-5%</td>
+    </tr>
+    <tr>
+      <td>F1 Score</td>
+      <td>81-89%</td>
+      <td>77-85%</td>
+      <td>+4-5%</td>
+    </tr>
+    <tr>
+      <td>AUC-ROC</td>
+      <td>88-94%</td>
+      <td>84-90%</td>
+      <td>+4%</td>
+    </tr>
+  </tbody>
+</table>
+<hr />
+<h1>2. Understanding Quantum Computing Basics (For ML Practitioners)</h1>
+<ac:structured-macro ac:name="note">
+  <ac:parameter ac:name="title">Why This Section Matters</ac:parameter>
+  <ac:rich-text-body>
+<p>Before diving into the implementation, you need to understand the quantum concepts we&#x27;re borrowing. Don&#x27;t worry - we&#x27;ll explain everything using analogies to concepts you already know from ML.</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+<h2>2.1 What is a Qubit? (The Quantum Version of a Bit)</h2>
+<h3>2.1.1 Classical Bits vs Qubits</h3>
+<p><strong>Classical bit:</strong> Can be either 0 or 1. That&#x27;s it.</p>
+<p><strong>Qubit:</strong> Can be in a &quot;superposition&quot; - a combination of 0 and 1 simultaneously.</p>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Mathematical Representation</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 Classical bit: b ∈ {0, 1}
 
 Qubit state: |ψ⟩ = α|0⟩ + β|1⟩
@@ -65,15 +98,14 @@ where:
 - |α|² + |β|² = 1 (normalization constraint)
 - |α|² = probability of measuring 0
 - |β|² = probability of measuring 1
-{code}
-
-*ML Analogy:* Think of a qubit like a probability distribution over {0, 1}, but with complex-valued "amplitudes" instead of just probabilities. The complex numbers allow for interference effects that create interesting mathematical properties.
-
-h3. 2.1.2 The Bloch Sphere (Visualizing a Qubit)
-
-Every single-qubit state can be represented as a point on a sphere called the "Bloch sphere":
-
-{code:title=Bloch Sphere Parameterization}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<p><strong>ML Analogy:</strong> Think of a qubit like a probability distribution over {0, 1}, but with complex-valued &quot;amplitudes&quot; instead of just probabilities. The complex numbers allow for interference effects that create interesting mathematical properties.</p>
+<h3>2.1.2 The Bloch Sphere (Visualizing a Qubit)</h3>
+<p>Every single-qubit state can be represented as a point on a sphere called the &quot;Bloch sphere&quot;:</p>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Bloch Sphere Parameterization</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 |ψ⟩ = cos(θ/2)|0⟩ + e^(iφ)·sin(θ/2)|1⟩
 
 where:
@@ -84,29 +116,61 @@ Key points on the sphere:
 - North pole (θ=0): |0⟩ state
 - South pole (θ=π): |1⟩ state
 - Equator (θ=π/2): Equal superposition of |0⟩ and |1⟩
-{code}
-
-{panel:title=Why This Matters for ML|borderStyle=solid}
-The Bloch sphere gives us a 3D representation of a qubit. When we measure a qubit, we get three numbers: the X, Y, and Z coordinates on this sphere. These become our quantum features!
-
-*This is the core of our approach:* We encode data into qubit states, then extract the (X, Y, Z) coordinates as features.
-{panel}
-
-h2. 2.2 Multiple Qubits and the Exponential State Space
-
-h3. 2.2.1 The Exponential Scaling
-
-When we have multiple qubits, the state space grows exponentially:
-
-||Number of Qubits||State Space Dimension||Equivalent to...||
-|1|2|2 probabilities|
-|2|4|4 probabilities|
-|10|1,024|Small neural network layer|
-|20|1,048,576|~1 million parameters|
-|30|1,073,741,824|~1 billion parameters|
-|50|1,125,899,906,842,624|More than all atoms on Earth!|
-
-{code:title=Mathematical Representation of n-Qubit State}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<ac:structured-macro ac:name="panel">
+  <ac:parameter ac:name="title">Why This Matters for ML</ac:parameter>
+  <ac:parameter ac:name="borderStyle">solid</ac:parameter>
+  <ac:rich-text-body>
+<p>The Bloch sphere gives us a 3D representation of a qubit. When we measure a qubit, we get three numbers: the X, Y, and Z coordinates on this sphere. These become our quantum features!</p>
+<p><strong>This is the core of our approach:</strong> We encode data into qubit states, then extract the (X, Y, Z) coordinates as features.</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+<h2>2.2 Multiple Qubits and the Exponential State Space</h2>
+<h3>2.2.1 The Exponential Scaling</h3>
+<p>When we have multiple qubits, the state space grows exponentially:</p>
+<table>
+  <tbody>
+    <tr>
+      <th>Number of Qubits</th>
+      <th>State Space Dimension</th>
+      <th>Equivalent to...</th>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>2</td>
+      <td>2 probabilities</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>4</td>
+      <td>4 probabilities</td>
+    </tr>
+    <tr>
+      <td>10</td>
+      <td>1,024</td>
+      <td>Small neural network layer</td>
+    </tr>
+    <tr>
+      <td>20</td>
+      <td>1,048,576</td>
+      <td>~1 million parameters</td>
+    </tr>
+    <tr>
+      <td>30</td>
+      <td>1,073,741,824</td>
+      <td>~1 billion parameters</td>
+    </tr>
+    <tr>
+      <td>50</td>
+      <td>1,125,899,906,842,624</td>
+      <td>More than all atoms on Earth!</td>
+    </tr>
+  </tbody>
+</table>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Mathematical Representation of n-Qubit State</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 For n qubits, a general state is:
 
 |ψ⟩ = Σ c_{i₁i₂...iₙ} |i₁i₂...iₙ⟩
@@ -115,15 +179,14 @@ where:
 - Each iₖ ∈ {0, 1}
 - There are 2ⁿ coefficients c_{i₁i₂...iₙ}
 - All |c|² must sum to 1
-{code}
-
-*ML Analogy:* This is like having a probability distribution over 2ⁿ possible outcomes. The exponential scaling is both the promise and the challenge of quantum computing.
-
-h3. 2.2.2 Entanglement (Quantum Correlations)
-
-*Entanglement* is a quantum phenomenon where qubits become correlated in ways that cannot be described by classical probability.
-
-{code:title=Example: Bell State (Maximally Entangled)}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<p><strong>ML Analogy:</strong> This is like having a probability distribution over 2ⁿ possible outcomes. The exponential scaling is both the promise and the challenge of quantum computing.</p>
+<h3>2.2.2 Entanglement (Quantum Correlations)</h3>
+<p><strong>Entanglement</strong> is a quantum phenomenon where qubits become correlated in ways that cannot be described by classical probability.</p>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Example: Bell State (Maximally Entangled)</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 |Φ⁺⟩ = (1/√2)(|00⟩ + |11⟩)
 
 This state means:
@@ -132,17 +195,15 @@ This state means:
 - But before measurement, both possibilities exist simultaneously
 
 This correlation is STRONGER than any classical correlation can be.
-{code}
-
-*Why This Matters for ML:* Entanglement allows our quantum circuits to create complex feature interactions. When we entangle qubits encoding different data features, we create correlations that capture feature interactions in ways classical methods cannot easily replicate.
-
-h2. 2.3 Quantum Gates (Transformations on Qubits)
-
-Just like neural networks apply transformations (weights, activations) to data, quantum circuits apply "gates" to qubits.
-
-h3. 2.3.1 Single-Qubit Gates
-
-{code:title=Common Single-Qubit Gates}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<p><strong>Why This Matters for ML:</strong> Entanglement allows our quantum circuits to create complex feature interactions. When we entangle qubits encoding different data features, we create correlations that capture feature interactions in ways classical methods cannot easily replicate.</p>
+<h2>2.3 Quantum Gates (Transformations on Qubits)</h2>
+<p>Just like neural networks apply transformations (weights, activations) to data, quantum circuits apply &quot;gates&quot; to qubits.</p>
+<h3>2.3.1 Single-Qubit Gates</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Common Single-Qubit Gates</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 HADAMARD GATE (H):
 - Creates superposition from basis state
 - H|0⟩ = (|0⟩ + |1⟩)/√2 = |+⟩
@@ -173,11 +234,12 @@ T GATE:
 
 T = | 1    0        |
     | 0   e^(iπ/4)  |
-{code}
-
-h3. 2.3.2 Two-Qubit Gates (Creating Entanglement)
-
-{code:title=Common Two-Qubit Gates}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h3>2.3.2 Two-Qubit Gates (Creating Entanglement)</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Common Two-Qubit Gates</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 CNOT (Controlled-NOT):
 - Flips second qubit IF first qubit is |1⟩
 - Creates entanglement when applied to superposition
@@ -206,13 +268,13 @@ ML Analogy: This is how we encode FEATURE INTERACTIONS. The rotation angle depen
 CZ (Controlled-Z):
 - Applies Z gate to second qubit IF first qubit is |1⟩
 - Used in Magic ansatz
-{code}
-
-h2. 2.4 Quantum Circuits (Putting It All Together)
-
-A quantum circuit is a sequence of gates applied to qubits - like a computational graph in deep learning.
-
-{code:title=Circuit Structure}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>2.4 Quantum Circuits (Putting It All Together)</h2>
+<p>A quantum circuit is a sequence of gates applied to qubits - like a computational graph in deep learning.</p>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Circuit Structure</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 QUANTUM CIRCUIT ANATOMY:
 
 Initial State     Gates (Layers)           Measurement
@@ -231,27 +293,24 @@ Where:
 - [Rz(xᵢ)]: Rotation gates encoding feature xᵢ
 - [XX]: Entangling gates between adjacent qubits
 - ⟨X⟩, ⟨Y⟩, ⟨Z⟩: Measured expectation values (our output features)
-{code}
-
-*ML Analogy:* Think of a quantum circuit like a neural network:
-- Initial state = input layer
-- Gates = layers with transformations
-- Measurements = output layer
-- But unlike neural networks, we don't train the circuit - we fix it and use it as a feature extractor
-
-----
-
-h1. 3. The Projected Quantum Kernel Method
-
-Now that you understand the quantum basics, let's see how we use them for machine learning.
-
-h2. 3.1 The Big Picture: Quantum Feature Maps
-
-h3. 3.1.1 What is a Feature Map?
-
-In kernel methods, a *feature map* transforms input data into a (usually higher-dimensional) feature space:
-
-{code:title=Classical vs Quantum Feature Maps}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<p><strong>ML Analogy:</strong> Think of a quantum circuit like a neural network:</p>
+<ul>
+  <li>Initial state = input layer</li>
+  <li>Gates = layers with transformations</li>
+  <li>Measurements = output layer</li>
+  <li>But unlike neural networks, we don&#x27;t train the circuit - we fix it and use it as a feature extractor</li>
+</ul>
+<hr />
+<h1>3. The Projected Quantum Kernel Method</h1>
+<p>Now that you understand the quantum basics, let&#x27;s see how we use them for machine learning.</p>
+<h2>3.1 The Big Picture: Quantum Feature Maps</h2>
+<h3>3.1.1 What is a Feature Map?</h3>
+<p>In kernel methods, a <strong>feature map</strong> transforms input data into a (usually higher-dimensional) feature space:</p>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Classical vs Quantum Feature Maps</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 CLASSICAL RBF FEATURE MAP:
 - Maps x ∈ ℝᵈ to infinite-dimensional space
 - φ(x) = exp(-||x||²/2) * [1, x₁, x₂, x₁², x₁x₂, ...]
@@ -261,13 +320,13 @@ QUANTUM FEATURE MAP:
 - Maps x ∈ ℝᵈ to 2ⁿ-dimensional Hilbert space
 - φ(x) = U(x)|0⟩ⁿ (apply circuit to initial state)
 - Result is a quantum state encoding the data
-{code}
-
-h3. 3.1.2 The Problem with Full Quantum Kernels
-
-The standard quantum kernel (Fidelity Quantum Kernel) computes:
-
-{code:title=Fidelity Quantum Kernel}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h3>3.1.2 The Problem with Full Quantum Kernels</h3>
+<p>The standard quantum kernel (Fidelity Quantum Kernel) computes:</p>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Fidelity Quantum Kernel</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 k_FQK(x, x') = |⟨φ(x')|φ(x)⟩|²
 
 This measures the overlap between two quantum states.
@@ -276,15 +335,13 @@ PROBLEMS:
 1. Values become exponentially small for different inputs
 2. Requires access to full quantum state (2ⁿ complex numbers)
 3. Numerically unstable for practical use
-{code}
-
-h3. 3.1.3 The Solution: Projected Quantum Kernel
-
-Instead of computing full state overlap, we:
-1. *Project* the quantum state to local observables (X, Y, Z on each qubit)
-2. Compare these *classical* 3n-dimensional vectors
-
-{code:title=Projected Quantum Kernel Concept}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h3>3.1.3 The Solution: Projected Quantum Kernel</h3>
+<p>Instead of computing full state overlap, we: 1. <strong>Project</strong> the quantum state to local observables (X, Y, Z on each qubit) 2. Compare these <strong>classical</strong> 3n-dimensional vectors</p>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Projected Quantum Kernel Concept</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 WORKFLOW:
 
 Classical Data x ∈ ℝᵈ
@@ -305,15 +362,14 @@ Classical Feature Vector Φ(x) ∈ ℝ³ⁿ
 RBF Kernel: k(x, x') = exp(-α||Φ(x) - Φ(x')||²)
 
 RESULT: We get benefits of quantum feature extraction but work with classical 3n-dimensional vectors!
-{code}
-
-h2. 3.2 Mathematical Derivation (Step by Step)
-
-h3. 3.2.1 Step 1: Pauli Matrices and Measurements
-
-When we "measure" a qubit, we're computing the expectation value of an observable. The three standard observables are the *Pauli matrices*:
-
-{code:title=Pauli Matrices Explained}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>3.2 Mathematical Derivation (Step by Step)</h2>
+<h3>3.2.1 Step 1: Pauli Matrices and Measurements</h3>
+<p>When we &quot;measure&quot; a qubit, we&#x27;re computing the expectation value of an observable. The three standard observables are the <strong>Pauli matrices</strong>:</p>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Pauli Matrices Explained</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 PAULI-X (bit flip):
 X = | 0  1 |
     | 1  0 |
@@ -343,15 +399,14 @@ EXPECTATION VALUES:
 ⟨Z⟩ = ⟨ψ|Z|ψ⟩ = probability(|0⟩) - probability(|1⟩)
 
 Range: All expectation values are in [-1, +1]
-{code}
-
-*ML Interpretation:* These three numbers (⟨X⟩, ⟨Y⟩, ⟨Z⟩) completely describe the state of a single qubit. They're the coordinates on the Bloch sphere!
-
-h3. 3.2.2 Step 2: Bloch Vector Representation
-
-Any single-qubit state can be written using its Bloch vector:
-
-{code:title=Bloch Vector}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<p><strong>ML Interpretation:</strong> These three numbers (⟨X⟩, ⟨Y⟩, ⟨Z⟩) completely describe the state of a single qubit. They&#x27;re the coordinates on the Bloch sphere!</p>
+<h3>3.2.2 Step 2: Bloch Vector Representation</h3>
+<p>Any single-qubit state can be written using its Bloch vector:</p>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Bloch Vector</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 DENSITY MATRIX:
 ρ = |ψ⟩⟨ψ| = (1/2)(I + rₓX + rᵧY + r_zZ)
 
@@ -363,13 +418,13 @@ where the Bloch vector r⃗ = (rₓ, rᵧ, r_z) has:
 CONSTRAINTS:
 - For pure states: |r⃗| = 1 (on sphere surface)
 - For mixed states: |r⃗| < 1 (inside sphere)
-{code}
-
-h3. 3.2.3 Step 3: Reduced Density Matrices
-
-For multi-qubit systems, each qubit has its own Bloch vector:
-
-{code:title=Reduced Density Matrix}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h3>3.2.3 Step 3: Reduced Density Matrices</h3>
+<p>For multi-qubit systems, each qubit has its own Bloch vector:</p>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Reduced Density Matrix</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 For qubit i in an n-qubit system:
 
 ρᵢ = Tr_{other qubits}(|ψ⟩⟨ψ|)
@@ -380,15 +435,14 @@ The Bloch vector for qubit i:
 - ⟨Xᵢ⟩ = Tr(ρᵢ · X)
 - ⟨Yᵢ⟩ = Tr(ρᵢ · Y)
 - ⟨Zᵢ⟩ = Tr(ρᵢ · Z)
-{code}
-
-*ML Interpretation:* Even though our full quantum state lives in 2ⁿ dimensions, each qubit's local state is described by just 3 numbers. We extract these 3 numbers per qubit, giving us 3n features total.
-
-h3. 3.2.4 Step 4: Distance Between Quantum States
-
-How do we measure the "distance" between two quantum states? We use the *Frobenius distance* between their density matrices:
-
-{code:title=Frobenius Distance}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<p><strong>ML Interpretation:</strong> Even though our full quantum state lives in 2ⁿ dimensions, each qubit&#x27;s local state is described by just 3 numbers. We extract these 3 numbers per qubit, giving us 3n features total.</p>
+<h3>3.2.4 Step 4: Distance Between Quantum States</h3>
+<p>How do we measure the &quot;distance&quot; between two quantum states? We use the <strong>Frobenius distance</strong> between their density matrices:</p>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Frobenius Distance</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 FROBENIUS NORM:
 ||A||_F = √(Tr(A†A)) = √(Σᵢⱼ |Aᵢⱼ|²)
 
@@ -398,13 +452,13 @@ For single-qubit density matrices with Bloch vectors r⃗ and s⃗:
              = (1/2)[(rₓ - sₓ)² + (rᵧ - sᵧ)² + (r_z - s_z)²]
 
 This is just (half) the squared Euclidean distance between Bloch vectors!
-{code}
-
-h3. 3.2.5 Step 5: The Complete PQK Formula
-
-Putting it all together, the *Projected Quantum Kernel* is:
-
-{code:title=Projected Quantum Kernel - Complete Formula}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h3>3.2.5 Step 5: The Complete PQK Formula</h3>
+<p>Putting it all together, the <strong>Projected Quantum Kernel</strong> is:</p>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Projected Quantum Kernel - Complete Formula</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 STEP 1: Define the quantum distance
 D(x, x') = Σᵢ₌₁ⁿ 2·||ρᵢ(x) - ρᵢ(x')||²_F
 
@@ -424,19 +478,23 @@ Then:
 k_PQK(x, x') = exp(-α · ||Φ(x) - Φ(x')||²)
 
 This is EXACTLY an RBF kernel in the 3n-dimensional projected feature space!
-{code}
-
-{panel:title=Key Insight for ML Practitioners|borderStyle=solid|borderColor=#090|titleBGColor=#dfd}
-*The PQK is simply an RBF kernel applied to quantum-derived features.* The "quantum magic" is in HOW we compute the feature vector Φ(x) - we use a quantum circuit as a non-linear feature extractor.
-
-*Comparison to Deep Learning:* This is similar to using a pre-trained CNN as a feature extractor, then applying a simple classifier on the extracted features. Here, the quantum circuit is our "feature extractor."
-{panel}
-
-h2. 3.3 Why Does This Work? (Theoretical Justification)
-
-h3. 3.3.1 Expressiveness of Quantum Feature Maps
-
-{code:title=Why Quantum Features Are Powerful}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<ac:structured-macro ac:name="panel">
+  <ac:parameter ac:name="title">Key Insight for ML Practitioners</ac:parameter>
+  <ac:parameter ac:name="borderStyle">solid</ac:parameter>
+  <ac:parameter ac:name="borderColor">#090</ac:parameter>
+  <ac:parameter ac:name="titleBGColor">#dfd</ac:parameter>
+  <ac:rich-text-body>
+<p><strong>The PQK is simply an RBF kernel applied to quantum-derived features.</strong> The &quot;quantum magic&quot; is in HOW we compute the feature vector Φ(x) - we use a quantum circuit as a non-linear feature extractor.</p>
+<p><strong>Comparison to Deep Learning:</strong> This is similar to using a pre-trained CNN as a feature extractor, then applying a simple classifier on the extracted features. Here, the quantum circuit is our &quot;feature extractor.&quot;</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+<h2>3.3 Why Does This Work? (Theoretical Justification)</h2>
+<h3>3.3.1 Expressiveness of Quantum Feature Maps</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Why Quantum Features Are Powerful</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 CLASSICAL RBF:
 - Creates features like: 1, x₁, x₂, x₁², x₁x₂, x₂², x₁³, ...
 - All polynomial-like combinations
@@ -448,11 +506,12 @@ QUANTUM FEATURE MAP:
 
 KEY PROPERTY:
 Quantum feature maps can be "classically hard to simulate" - meaning classical computers cannot efficiently compute the same features. This is the source of potential quantum advantage.
-{code}
-
-h3. 3.3.2 What Information is Captured?
-
-{code:title=Information Content Analysis}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h3>3.3.2 What Information is Captured?</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Information Content Analysis</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 WHAT WE KEEP:
 - All single-qubit marginal distributions
 - Local quantum correlations mediated by entanglement
@@ -464,29 +523,27 @@ WHAT WE LOSE:
 
 WHY THIS IS OKAY:
 For many ML tasks, local correlations + entanglement-mediated interactions are sufficient. We trade some quantum expressiveness for classical tractability.
-{code}
-
-----
-
-h1. 4. Our Circuit Architecture (The Hamiltonian Ansatz)
-
-h2. 4.1 Circuit Design Philosophy
-
-h3. 4.1.1 Requirements for a Good Quantum Feature Map
-
-{code:title=Feature Map Design Criteria}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<hr />
+<h1>4. Our Circuit Architecture (The Hamiltonian Ansatz)</h1>
+<h2>4.1 Circuit Design Philosophy</h2>
+<h3>4.1.1 Requirements for a Good Quantum Feature Map</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Feature Map Design Criteria</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 1. DATA ENCODING: Must encode all input features into quantum state
 2. ENTANGLEMENT: Must create correlations between features
 3. EXPRESSIVENESS: Must create non-trivial, non-linear features
 4. SIMULABILITY: Must be efficiently simulable on classical computers
 5. PARAMETERIZATION: Hyperparameters to tune for different datasets
-{code}
-
-h3. 4.1.2 Why "Hamiltonian" Ansatz?
-
-The name comes from physics: our circuit structure resembles time evolution under a quantum Hamiltonian (energy operator). Specifically:
-
-{code:title=Physics Inspiration}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h3>4.1.2 Why &quot;Hamiltonian&quot; Ansatz?</h3>
+<p>The name comes from physics: our circuit structure resembles time evolution under a quantum Hamiltonian (energy operator). Specifically:</p>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Physics Inspiration</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 QUANTUM TIME EVOLUTION:
 |ψ(t)⟩ = exp(-iHt)|ψ(0)⟩
 
@@ -498,11 +555,12 @@ OUR CIRCUIT:
 where H(x) encodes our data features.
 
 The Rz and R_XX gates implement this evolution approximately.
-{code}
-
-h2. 4.2 Complete Circuit Structure
-
-{code:title=Hamiltonian Ansatz - Layer by Layer}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>4.2 Complete Circuit Structure</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Hamiltonian Ansatz - Layer by Layer</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 ═══════════════════════════════════════════════════════════════════════════════
                         HAMILTONIAN ANSATZ CIRCUIT
 ═══════════════════════════════════════════════════════════════════════════════
@@ -574,11 +632,12 @@ For each qubit i, compute:
   ⟨Zᵢ⟩ = ⟨ψ_final|Zᵢ|ψ_final⟩
 
 OUTPUT: Φ(x) = [⟨X₁⟩, ⟨Y₁⟩, ⟨Z₁⟩, ..., ⟨Xₙ⟩, ⟨Yₙ⟩, ⟨Zₙ⟩] ∈ ℝ³ⁿ
-{code}
-
-h2. 4.3 Visual Circuit Diagram
-
-{code:title=Circuit Diagram (5 qubits, 2 reps)}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>4.3 Visual Circuit Diagram</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Circuit Diagram (5 qubits, 2 reps)</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 q₀: |0⟩─[H]─[Rz]─[XX]──────────[Rz]─[XX]──────────⟨X₀,Y₀,Z₀⟩
               │                  │
 q₁: |0⟩─[H]─[Rz]─[XX]─[XX]─────[Rz]─[XX]─[XX]────⟨X₁,Y₁,Z₁⟩
@@ -595,13 +654,13 @@ Legend:
 [H]  = Hadamard gate
 [Rz] = Rz(γxᵢ/π) rotation (data encoding)
 [XX] = R_XX(γ²(1-xᵢ)(1-xⱼ)) entangling gate
-{code}
-
-h2. 4.4 Entanglement Topology
-
-h3. 4.4.1 Linear Nearest-Neighbor Connectivity
-
-{code:title=Entanglement Map}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>4.4 Entanglement Topology</h2>
+<h3>4.4.1 Linear Nearest-Neighbor Connectivity</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Entanglement Map</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 We use LINEAR nearest-neighbor connectivity:
 
 Qubits:  0 ─── 1 ─── 2 ─── 3 ─── 4
@@ -616,11 +675,12 @@ WHY LINEAR?
 ALTERNATIVE: Full connectivity (all pairs)
 - Would create [(0,1), (0,2), (0,3), ..., (3,4)]
 - More expressive but exponentially harder to simulate
-{code}
-
-h3. 4.4.2 Gate Ordering
-
-{code:title=Entanglement Graph Algorithm}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h3>4.4.2 Gate Ordering</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Entanglement Graph Algorithm</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 def entanglement_graph(nq, nn=1):
     """
     Generate non-overlapping gate layers.
@@ -645,11 +705,12 @@ def entanglement_graph(nq, nn=1):
 # Example: entanglement_graph(5, 1)
 # Returns: [(0,1), (2,3), (1,2), (3,4)]
 # This allows parallel execution of (0,1) and (2,3), then (1,2) and (3,4)
-{code}
-
-h2. 4.5 Alternative: The Magic Ansatz
-
-{code:title=Magic Ansatz Structure}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>4.5 Alternative: The Magic Ansatz</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Magic Ansatz Structure</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 For comparison, the MAGIC ANSATZ uses different gates:
 
 LAYER STRUCTURE (repeated r times):
@@ -672,21 +733,21 @@ WHY "MAGIC"?
 COMPARISON:
 - Hamiltonian: Smooth, continuous encoding (better for continuous features)
 - Magic: Discrete, structured encoding (may work better for categorical-like data)
-{code}
-
-----
-
-h1. 5. Tensor Network Simulation (How We Compute This Efficiently)
-
-{note:title=Why This Section is Important}
-The previous sections explained WHAT we compute. This section explains HOW we compute it efficiently on classical computers. This is the key engineering that makes the whole system practical.
-{note}
-
-h2. 5.1 The Computational Challenge
-
-h3. 5.1.1 The Exponential Wall
-
-{code:title=Why Naive Simulation Fails}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<hr />
+<h1>5. Tensor Network Simulation (How We Compute This Efficiently)</h1>
+<ac:structured-macro ac:name="note">
+  <ac:parameter ac:name="title">Why This Section is Important</ac:parameter>
+  <ac:rich-text-body>
+<p>The previous sections explained WHAT we compute. This section explains HOW we compute it efficiently on classical computers. This is the key engineering that makes the whole system practical.</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+<h2>5.1 The Computational Challenge</h2>
+<h3>5.1.1 The Exponential Wall</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Why Naive Simulation Fails</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 NAIVE APPROACH:
 Store the full quantum state as a vector of 2ⁿ complex numbers.
 
@@ -699,11 +760,12 @@ MEMORY REQUIREMENTS:
 | 50     | 2⁵⁰ = 1P          | 16 PB               |
 
 PROBLEM: Even 50 qubits exceeds world's total storage!
-{code}
-
-h3. 5.1.2 The Key Insight: Exploiting Structure
-
-{code:title=Why MPS Works}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h3>5.1.2 The Key Insight: Exploiting Structure</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Why MPS Works</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 NOT ALL QUANTUM STATES ARE EQUALLY COMPLEX
 
 Key observation: Many useful quantum states have LIMITED ENTANGLEMENT.
@@ -716,13 +778,13 @@ OUR CIRCUITS:
 - Linear connectivity → 1D entanglement structure
 - Shallow depth → bounded entanglement growth
 - Result: Can be represented efficiently!
-{code}
-
-h2. 5.2 Matrix Product States (MPS)
-
-h3. 5.2.1 The MPS Representation
-
-{code:title=MPS Definition}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>5.2 Matrix Product States (MPS)</h2>
+<h3>5.2.1 The MPS Representation</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">MPS Definition</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 STANDARD STATE VECTOR:
 |ψ⟩ = Σ c_{i₁i₂...iₙ} |i₁i₂...iₙ⟩
 
@@ -745,11 +807,12 @@ PICTORIAL REPRESENTATION:
 
 Each line represents matrix multiplication.
 The contraction of all matrices gives the coefficient c_{i₁i₂...iₙ}.
-{code}
-
-h3. 5.2.2 Bond Dimension and Compression
-
-{code:title=Bond Dimension Explained}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h3>5.2.2 Bond Dimension and Compression</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Bond Dimension Explained</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 BOND DIMENSION (χ):
 - Controls the "capacity" of the MPS representation
 - Larger χ = more entanglement can be captured
@@ -768,11 +831,12 @@ Maximum entanglement entropy across any cut: S ≤ log₂(χ)
 
 For χ=100: S_max = log₂(100) ≈ 6.6 bits
 This is MUCH less than the maximum possible (n/2 bits for n qubits)
-{code}
-
-h3. 5.2.3 Why This Works for Our Circuits
-
-{code:title=MPS Suitability Analysis}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h3>5.2.3 Why This Works for Our Circuits</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">MPS Suitability Analysis</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 OUR CIRCUIT PROPERTIES:
 
 1. LINEAR CONNECTIVITY
@@ -792,13 +856,13 @@ OUR CIRCUIT PROPERTIES:
 EMPIRICAL OBSERVATION:
 For our Hamiltonian ansatz with r ≤ 10, χ rarely exceeds 50.
 This makes simulation very efficient.
-{code}
-
-h2. 5.3 Gate Application on MPS
-
-h3. 5.3.1 Single-Qubit Gates (Easy Case)
-
-{code:title=Single-Qubit Gate Application}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>5.3 Gate Application on MPS</h2>
+<h3>5.3.1 Single-Qubit Gates (Easy Case)</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Single-Qubit Gate Application</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 OPERATION: Apply gate U to qubit k
 
 ALGORITHM:
@@ -813,11 +877,12 @@ BOND DIMENSION: Unchanged! Single-qubit gates don't create entanglement.
 EXAMPLE (Rz gate):
 Aᵏ[0] → e^(-iθ/2) · Aᵏ[0]
 Aᵏ[1] → e^(+iθ/2) · Aᵏ[1]
-{code}
-
-h3. 5.3.2 Two-Qubit Gates (The Tricky Part)
-
-{code:title=Two-Qubit Gate Application}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h3>5.3.2 Two-Qubit Gates (The Tricky Part)</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Two-Qubit Gate Application</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 OPERATION: Apply gate U to adjacent qubits k and k+1
 
 ALGORITHM:
@@ -846,17 +911,20 @@ BOND DIMENSION: Can increase up to 2χ before truncation
 TRUNCATION ERROR:
 Error ≤ √(Σᵢ>χ_max σᵢ²)
 With cutoff 10⁻¹⁰, errors are negligible.
-{code}
-
-{panel:title=ML Analogy: SVD Truncation|borderStyle=solid}
-The SVD truncation in MPS is similar to *PCA truncation* or *low-rank approximation* in classical ML. We're keeping the "most important" components and discarding the rest.
-
-The difference: In MPS, this happens at EVERY two-qubit gate, not just once at the end. The errors can accumulate, but for our shallow circuits, they remain small.
-{panel}
-
-h3. 5.3.3 Non-Adjacent Gates (SWAP Strategy)
-
-{code:title=Non-Adjacent Gate Handling}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<ac:structured-macro ac:name="panel">
+  <ac:parameter ac:name="title">ML Analogy: SVD Truncation</ac:parameter>
+  <ac:parameter ac:name="borderStyle">solid</ac:parameter>
+  <ac:rich-text-body>
+<p>The SVD truncation in MPS is similar to <strong>PCA truncation</strong> or <strong>low-rank approximation</strong> in classical ML. We&#x27;re keeping the &quot;most important&quot; components and discarding the rest.</p>
+<p>The difference: In MPS, this happens at EVERY two-qubit gate, not just once at the end. The errors can accumulate, but for our shallow circuits, they remain small.</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+<h3>5.3.3 Non-Adjacent Gates (SWAP Strategy)</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Non-Adjacent Gate Handling</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 PROBLEM: What if we need a gate between non-adjacent qubits?
 
 Example: Gate between qubits 0 and 3
@@ -875,11 +943,12 @@ COMPLEXITY: O(d × χ³) where d is the distance between qubits
 OUR APPROACH:
 The pytket compiler automatically handles this with its DecomposeBRIDGE pass.
 It inserts the necessary SWAP gates during circuit compilation.
-{code}
-
-h2. 5.4 Computing Expectation Values
-
-{code:title=Expectation Value Computation}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>5.4 Computing Expectation Values</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Expectation Value Computation</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 GOAL: Compute ⟨ψ|Xᵢ|ψ⟩ for qubit i (similarly for Y, Z)
 
 ALGORITHM (using canonical form):
@@ -905,13 +974,13 @@ Before:
 After (canonical form):
 ⟨ψ|Xᵢ|ψ⟩ = Tr(Aⁱ† · X · Aⁱ)
          = Simple local computation!
-{code}
-
-h2. 5.5 ITensor Library Implementation
-
-h3. 5.5.1 What is ITensor?
-
-{code:title=ITensor Overview}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>5.5 ITensor Library Implementation</h2>
+<h3>5.5.1 What is ITensor?</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">ITensor Overview</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 ITensor is a C++ library for tensor network calculations.
 
 KEY FEATURES:
@@ -924,11 +993,12 @@ REFERENCE:
 Fishman, M., White, S. R., & Stoudenmire, E. M. (2022).
 "The ITensor Software Library for Tensor Network Calculations."
 SciPost Physics Codebases, 4.
-{code}
-
-h3. 5.5.2 Our C++ Implementation
-
-{code:title=Key C++ Code (helloitensor.cc)}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h3>5.5.2 Our C++ Implementation</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Key C++ Code (helloitensor.cc)</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 // Main simulation function
 MPS apply_gates(vector<tuple<int,int,int,double>> circuits,
                 Qubit site_inds, int N, double cutoff) {
@@ -1002,11 +1072,12 @@ vector<vector<double>> circuit_xyz_exp(gates, n_qubits) {
     }
     return results;
 }
-{code}
-
-h3. 5.5.3 Python-C++ Bridge
-
-{code:title=pybind11 Interface}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h3>5.5.3 Python-C++ Bridge</h3>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">pybind11 Interface</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 // C++ side (in helloitensor.cc)
 PYBIND11_MODULE(helloitensor, m) {
     m.def("circuit_xyz_exp", &circuit_xyz_exp<int,double>,
@@ -1019,32 +1090,67 @@ from helloitensor import circuit_xyz_exp
 # gates = [[type, q1, q2, angle], ...]
 # Returns [[<X1>, <Y1>, <Z1>], [<X2>, <Y2>, <Z2>], ...]
 expectation_values = circuit_xyz_exp(gate_list, n_qubits)
-{code}
-
-h2. 5.6 Complexity Summary
-
-||Operation||Complexity||Notes||
-|Initialize \|0⟩^⊗n|O(n)|χ = 1|
-|Single-qubit gate|O(χ²)|No χ increase|
-|Two-qubit gate (adjacent)|O(χ³)|SVD step, may increase χ|
-|Two-qubit gate (distance d)|O(d × χ³)|Requires d SWAPs|
-|Expectation value (per qubit)|O(χ²)|Using canonical form|
-|Full circuit simulation|O(n × r × χ³)|n qubits, r reps|
-
-{panel:title=Practical Performance|borderStyle=solid}
-For typical parameters (n=12 qubits, r=10 reps, χ≈50):
-- Single circuit simulation: ~50-100 ms
-- All expectation values: ~5 ms
-- Total per data point: ~100 ms
-{panel}
-
-----
-
-h1. 6. Complete Pipeline Implementation
-
-h2. 6.1 Stage 1: Data Preprocessing
-
-{code:title=Complete Preprocessing Pipeline}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>5.6 Complexity Summary</h2>
+<table>
+  <tbody>
+    <tr>
+      <th>Operation</th>
+      <th>Complexity</th>
+      <th>Notes</th>
+    </tr>
+    <tr>
+      <td>Initialize \</td>
+      <td>0⟩^⊗n</td>
+      <td>O(n)</td>
+      <td>χ = 1</td>
+    </tr>
+    <tr>
+      <td>Single-qubit gate</td>
+      <td>O(χ²)</td>
+      <td>No χ increase</td>
+    </tr>
+    <tr>
+      <td>Two-qubit gate (adjacent)</td>
+      <td>O(χ³)</td>
+      <td>SVD step, may increase χ</td>
+    </tr>
+    <tr>
+      <td>Two-qubit gate (distance d)</td>
+      <td>O(d × χ³)</td>
+      <td>Requires d SWAPs</td>
+    </tr>
+    <tr>
+      <td>Expectation value (per qubit)</td>
+      <td>O(χ²)</td>
+      <td>Using canonical form</td>
+    </tr>
+    <tr>
+      <td>Full circuit simulation</td>
+      <td>O(n × r × χ³)</td>
+      <td>n qubits, r reps</td>
+    </tr>
+  </tbody>
+</table>
+<ac:structured-macro ac:name="panel">
+  <ac:parameter ac:name="title">Practical Performance</ac:parameter>
+  <ac:parameter ac:name="borderStyle">solid</ac:parameter>
+  <ac:rich-text-body>
+<p>For typical parameters (n=12 qubits, r=10 reps, χ≈50):</p>
+<ul>
+  <li>Single circuit simulation: ~50-100 ms</li>
+  <li>All expectation values: ~5 ms</li>
+  <li>Total per data point: ~100 ms</li>
+</ul>
+  </ac:rich-text-body>
+</ac:structured-macro>
+<hr />
+<h1>6. Complete Pipeline Implementation</h1>
+<h2>6.1 Stage 1: Data Preprocessing</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Complete Preprocessing Pipeline</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 ═══════════════════════════════════════════════════════════════════════════════
                          DATA PREPROCESSING PIPELINE
 ═══════════════════════════════════════════════════════════════════════════════
@@ -1164,11 +1270,12 @@ rf = RandomForestClassifier(n_estimators=100)
 rf.fit(X_final, y)
 top_features = np.argsort(rf.feature_importances_)[::-1][:num_features]
 X_selected = X_final[:, top_features]
-{code}
-
-h2. 6.2 Stage 2: Quantum Circuit Construction
-
-{code:title=Circuit Construction Code}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>6.2 Stage 2: Quantum Circuit Construction</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Circuit Construction Code</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 ═══════════════════════════════════════════════════════════════════════════════
                          CIRCUIT CONSTRUCTION
 ═══════════════════════════════════════════════════════════════════════════════
@@ -1295,11 +1402,12 @@ class ProjectedKernelStateAnsatz:
             gates.append([gate_codes[op_type], q1, q2, float(angle)])
 
         return gates
-{code}
-
-h2. 6.3 Stage 3: Kernel Matrix Construction
-
-{code:title=Kernel Matrix Construction with MPI}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>6.3 Stage 3: Kernel Matrix Construction</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Kernel Matrix Construction with MPI</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 ═══════════════════════════════════════════════════════════════════════════════
                     PARALLEL KERNEL MATRIX CONSTRUCTION
 ═══════════════════════════════════════════════════════════════════════════════
@@ -1426,11 +1534,12 @@ ansatz = ProjectedKernelStateAnsatz(
 # Build kernel matrices
 K_train = build_kernel_matrix(mpi_comm, ansatz, X_train, alpha=0.5)
 K_test = build_kernel_matrix(mpi_comm, ansatz, X_train, Y=X_test, alpha=0.5)
-{code}
-
-h2. 6.4 Stage 4: Model Training and Evaluation
-
-{code:title=Model Training Code}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>6.4 Stage 4: Model Training and Evaluation</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Model Training Code</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 ═══════════════════════════════════════════════════════════════════════════════
                          MODEL TRAINING AND EVALUATION
 ═══════════════════════════════════════════════════════════════════════════════
@@ -1505,24 +1614,61 @@ print("════════════════════════�
 print(f"PQK Accuracy:  {results['Accuracy']:.4f}")
 print(f"RBF Accuracy:  {accuracy_score(test_labels, rbf_predictions):.4f}")
 print(f"Improvement:   {results['Accuracy'] - accuracy_score(test_labels, rbf_predictions):.4f}")
-{code}
-
-----
-
-h1. 7. Parameter Reference Guide
-
-h2. 7.1 Quantum Circuit Parameters
-
-||Parameter||Symbol||Type||Recommended Range||Effect||
-|num_features|n|int|5-50|More qubits = more expressive but slower|
-|reps|r|int|2-10|More reps = deeper circuit, more entanglement|
-|gamma|γ|float|0.1-1.0|Smaller for more qubits; controls rotation magnitude|
-|alpha|α|float|0.1-2.0|Kernel bandwidth; like γ in classical RBF|
-|ansatz|-|str|"hamiltonian"|Circuit type; hamiltonian recommended for continuous data|
-
-h2. 7.2 Parameter Selection Guidelines
-
-{code:title=Parameter Selection Decision Tree}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<hr />
+<h1>7. Parameter Reference Guide</h1>
+<h2>7.1 Quantum Circuit Parameters</h2>
+<table>
+  <tbody>
+    <tr>
+      <th>Parameter</th>
+      <th>Symbol</th>
+      <th>Type</th>
+      <th>Recommended Range</th>
+      <th>Effect</th>
+    </tr>
+    <tr>
+      <td>num_features</td>
+      <td>n</td>
+      <td>int</td>
+      <td>5-50</td>
+      <td>More qubits = more expressive but slower</td>
+    </tr>
+    <tr>
+      <td>reps</td>
+      <td>r</td>
+      <td>int</td>
+      <td>2-10</td>
+      <td>More reps = deeper circuit, more entanglement</td>
+    </tr>
+    <tr>
+      <td>gamma</td>
+      <td>γ</td>
+      <td>float</td>
+      <td>0.1-1.0</td>
+      <td>Smaller for more qubits; controls rotation magnitude</td>
+    </tr>
+    <tr>
+      <td>alpha</td>
+      <td>α</td>
+      <td>float</td>
+      <td>0.1-2.0</td>
+      <td>Kernel bandwidth; like γ in classical RBF</td>
+    </tr>
+    <tr>
+      <td>ansatz</td>
+      <td>-</td>
+      <td>str</td>
+      <td>&quot;hamiltonian&quot;</td>
+      <td>Circuit type; hamiltonian recommended for continuous data</td>
+    </tr>
+  </tbody>
+</table>
+<h2>7.2 Parameter Selection Guidelines</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Parameter Selection Decision Tree</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 HOW TO CHOOSE PARAMETERS:
 
 1. NUMBER OF FEATURES (num_features):
@@ -1549,23 +1695,59 @@ HOW TO CHOOSE PARAMETERS:
    Grid search: [0.01, 0.05, 0.1, 0.5, 1.0, 1.5, 2.0]
    Higher C: More complex boundary, risk of overfitting
    Lower C: Simpler boundary, risk of underfitting
-{code}
-
-h2. 7.3 Common Configurations
-
-||Use Case||num_features||reps||gamma||alpha||C||
-|Quick test|8|2|1.0|0.5|1.0|
-|Balanced accuracy|12|5|1.0|0.5|0.5|
-|High precision|12|10|0.8|0.3|1.0|
-|Many features|20|10|0.3|0.1|0.1|
-
-----
-
-h1. 8. Fraud Detection Specific Guidance
-
-h2. 8.1 The Elliptic Bitcoin Dataset
-
-{code:title=Dataset Summary}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>7.3 Common Configurations</h2>
+<table>
+  <tbody>
+    <tr>
+      <th>Use Case</th>
+      <th>num_features</th>
+      <th>reps</th>
+      <th>gamma</th>
+      <th>alpha</th>
+      <th>C</th>
+    </tr>
+    <tr>
+      <td>Quick test</td>
+      <td>8</td>
+      <td>2</td>
+      <td>1.0</td>
+      <td>0.5</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <td>Balanced accuracy</td>
+      <td>12</td>
+      <td>5</td>
+      <td>1.0</td>
+      <td>0.5</td>
+      <td>0.5</td>
+    </tr>
+    <tr>
+      <td>High precision</td>
+      <td>12</td>
+      <td>10</td>
+      <td>0.8</td>
+      <td>0.3</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <td>Many features</td>
+      <td>20</td>
+      <td>10</td>
+      <td>0.3</td>
+      <td>0.1</td>
+      <td>0.1</td>
+    </tr>
+  </tbody>
+</table>
+<hr />
+<h1>8. Fraud Detection Specific Guidance</h1>
+<h2>8.1 The Elliptic Bitcoin Dataset</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Dataset Summary</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 ELLIPTIC BITCOIN DATASET
 
 Source: Anti-money laundering research
@@ -1590,11 +1772,12 @@ FEATURES (166 total):
 - Aggregated features (72): Neighborhood statistics
   - Mean/std of neighbor features
   - Graph structure features
-{code}
-
-h2. 8.2 Recommended Configuration for Elliptic
-
-{code:title=Optimal Parameters for Elliptic Dataset}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>8.2 Recommended Configuration for Elliptic</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Optimal Parameters for Elliptic Dataset</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 # Tested configuration achieving ~90% F1 score
 
 # Data parameters
@@ -1616,11 +1799,12 @@ alpha = 0.5
 
 # SVM parameters
 C = 0.5             # Moderate regularization
-{code}
-
-h2. 8.3 Evaluation Metrics for Fraud Detection
-
-{code:title=Metrics Interpretation}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>8.3 Evaluation Metrics for Fraud Detection</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Metrics Interpretation</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 FRAUD DETECTION METRICS GUIDE
 
 For fraud detection, different metrics matter differently:
@@ -1659,15 +1843,14 @@ Actual Fraud  │   TP    │   FN    │  ← We want to minimize FN (costly!)
 Actual Legit  │   FP    │   TN    │  ← FP is annoying but not as costly
               │(Annoying│ (Good!) │
               └─────────┴─────────┘
-{code}
-
-----
-
-h1. 9. Deployment and Operations
-
-h2. 9.1 Running the Pipeline
-
-{code:title=Command Line Usage}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<hr />
+<h1>9. Deployment and Operations</h1>
+<h2>9.1 Running the Pipeline</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Command Line Usage</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 ═══════════════════════════════════════════════════════════════════════════════
                          RUNNING THE PIPELINE
 ═══════════════════════════════════════════════════════════════════════════════
@@ -1688,11 +1871,12 @@ mpirun -n 4 python main.py 12 10 1 0.5 100 100 456 elliptic_preproc.csv
 
 # On a cluster with job scheduler (SLURM example)
 srun --ntasks=16 --cpus-per-task=4 python main.py 12 10 1 0.5 100 100 456 data.csv
-{code}
-
-h2. 9.2 Docker Deployment
-
-{code:title=Docker Commands}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>9.2 Docker Deployment</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Docker Commands</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 # Build container
 cd Installation-Script
 docker build -t qiml .
@@ -1709,54 +1893,86 @@ docker run \
    --env DATA_SEED=456 \
    --env DATA_FILE=elliptic_preproc.csv \
    qiml
-{code}
-
-h2. 9.3 Output Files
-
-||File||Location||Description||
-|Training kernel|kernels/TrainKernel_Nf-{n}_r-{r}_g-{γ}_Ntr-{N}.npy|N×N kernel matrix|
-|Test kernel|kernels/TestKernel_Nf-{n}_r-{r}_g-{γ}_Ntr-{N}.npy|M×N kernel matrix|
-|Profiling|{info_file}.json|Timing information|
-|Model|model/*.pkl|Trained classifier|
-|Scaler|model/scaler.pkl|Fitted data scaler|
-
-----
-
-h1. 10. References and Further Reading
-
-h2. 10.1 Core Papers
-
-# *Huang, H.-Y. et al.* (2021). "Power of data in quantum machine learning." _Nature Communications_, 12, 2631. [Link|https://www.nature.com/articles/s41467-021-22539-9]
-   - Introduced projected quantum kernels
-   - Theoretical foundation for our approach
-
-# *Havlíček, V. et al.* (2019). "Supervised learning with quantum-enhanced feature spaces." _Nature_, 567, 209-212. [Link|https://www.nature.com/articles/s41586-019-0980-2]
-   - Original quantum feature map paper
-   - ZZ feature map design
-
-# *Fishman, M., White, S. R., & Stoudenmire, E. M.* (2022). "The ITensor Software Library." _SciPost Physics Codebases_, 4. [Link|https://scipost.org/SciPostPhysCodeb.4]
-   - ITensor library documentation
-   - MPS algorithms
-
-h2. 10.2 Fraud Detection Applications
-
-# *Heredge, J. et al.* (2023). "Quantum Multiple Kernel Learning in Financial Classification Tasks." [arXiv:2312.00260|https://arxiv.org/abs/2312.00260]
-
-# *Vasquez, A.C. et al.* (2023). "Financial Fraud Detection: A Comparative Study of Quantum Machine Learning Models." [arXiv:2308.05237|https://arxiv.org/abs/2308.05237]
-
-h2. 10.3 Additional Resources
-
-- [ITensor Documentation|https://itensor.org/docs.cgi]
-- [pytket Documentation|https://tket.quantinuum.com/api-docs/]
-- [PennyLane Kernel Tutorial|https://pennylane.ai/qml/demos/tutorial_kernel_based_training]
-
-----
-
-h1. Appendix A: Quick Reference
-
-h2. A.1 Key Formulas
-
-{code:title=Essential Equations}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>9.3 Output Files</h2>
+<table>
+  <tbody>
+    <tr>
+      <th>File</th>
+      <th>Location</th>
+      <th>Description</th>
+    </tr>
+    <tr>
+      <td>Training kernel</td>
+      <td>kernels/TrainKernel_Nf-{n}_r-{r}_g-{γ}_Ntr-{N}.npy</td>
+      <td>N×N kernel matrix</td>
+    </tr>
+    <tr>
+      <td>Test kernel</td>
+      <td>kernels/TestKernel_Nf-{n}_r-{r}_g-{γ}_Ntr-{N}.npy</td>
+      <td>M×N kernel matrix</td>
+    </tr>
+    <tr>
+      <td>Profiling</td>
+      <td>{info_file}.json</td>
+      <td>Timing information</td>
+    </tr>
+    <tr>
+      <td>Model</td>
+      <td>model/*.pkl</td>
+      <td>Trained classifier</td>
+    </tr>
+    <tr>
+      <td>Scaler</td>
+      <td>model/scaler.pkl</td>
+      <td>Fitted data scaler</td>
+    </tr>
+  </tbody>
+</table>
+<hr />
+<h1>10. References and Further Reading</h1>
+<h2>10.1 Core Papers</h2>
+<ol>
+  <li><strong>Huang, H.-Y. et al.</strong> (2021). &quot;Power of data in quantum machine learning.&quot; _Nature Communications_, 12, 2631. [Link|https://www.nature.com/articles/s41467-021-22539-9]</li>
+</ol>
+<ul>
+  <li>Introduced projected quantum kernels</li>
+  <li>Theoretical foundation for our approach</li>
+</ul>
+<ol>
+  <li><strong>Havlíček, V. et al.</strong> (2019). &quot;Supervised learning with quantum-enhanced feature spaces.&quot; _Nature_, 567, 209-212. [Link|https://www.nature.com/articles/s41586-019-0980-2]</li>
+</ol>
+<ul>
+  <li>Original quantum feature map paper</li>
+  <li>ZZ feature map design</li>
+</ul>
+<ol>
+  <li><strong>Fishman, M., White, S. R., &amp;amp; Stoudenmire, E. M.</strong> (2022). &quot;The ITensor Software Library.&quot; _SciPost Physics Codebases_, 4. [Link|https://scipost.org/SciPostPhysCodeb.4]</li>
+</ol>
+<ul>
+  <li>ITensor library documentation</li>
+  <li>MPS algorithms</li>
+</ul>
+<h2>10.2 Fraud Detection Applications</h2>
+<ol>
+  <li><strong>Heredge, J. et al.</strong> (2023). &quot;Quantum Multiple Kernel Learning in Financial Classification Tasks.&quot; [arXiv:2312.00260|https://arxiv.org/abs/2312.00260]</li>
+</ol>
+<ol>
+  <li><strong>Vasquez, A.C. et al.</strong> (2023). &quot;Financial Fraud Detection: A Comparative Study of Quantum Machine Learning Models.&quot; [arXiv:2308.05237|https://arxiv.org/abs/2308.05237]</li>
+</ol>
+<h2>10.3 Additional Resources</h2>
+<ul>
+  <li>[ITensor Documentation|https://itensor.org/docs.cgi]</li>
+  <li>[pytket Documentation|https://tket.quantinuum.com/api-docs/]</li>
+  <li>[PennyLane Kernel Tutorial|https://pennylane.ai/qml/demos/tutorial_kernel_based_training]</li>
+</ul>
+<hr />
+<h1>Appendix A: Quick Reference</h1>
+<h2>A.1 Key Formulas</h2>
+<ac:structured-macro ac:name="code">
+  <ac:parameter ac:name="title">Essential Equations</ac:parameter>
+  <ac:plain-text-body><![CDATA[
 PROJECTED QUANTUM KERNEL:
 k(x, x') = exp(-α × Σᵢ [(⟨Xᵢ⟩ˣ - ⟨Xᵢ⟩ˣ')² + (⟨Yᵢ⟩ˣ - ⟨Yᵢ⟩ˣ')² + (⟨Zᵢ⟩ˣ - ⟨Zᵢ⟩ˣ')²])
 
@@ -1765,30 +1981,70 @@ U(x) = H⊗ⁿ × ∏ᵣ [∏ᵢ Rz(γxᵢ/π) × ∏_{(i,j)} R_XX(γ²(1-xᵢ)(
 
 FEATURE VECTOR:
 Φ(x) = [⟨X₁⟩, ⟨Y₁⟩, ⟨Z₁⟩, ..., ⟨Xₙ⟩, ⟨Yₙ⟩, ⟨Zₙ⟩] ∈ ℝ³ⁿ
-{code}
-
-h2. A.2 Parameter Quick Guide
-
-||Parameter||Quick Setting||
-|num_features|12|
-|reps|10|
-|gamma|1.0|
-|alpha|0.5|
-|C|0.5|
-
-h2. A.3 Expected Performance
-
-||Metric||Target||
-|Accuracy|85-92%|
-|Recall|82-90%|
-|F1 Score|81-89%|
-|Inference|<200ms|
-
-----
-
-{panel:title=Document Information|borderStyle=solid|borderColor=#ccc|titleBGColor=#f0f0f0}
-*Version:* 1.0
-*Last Updated:* January 2026
-*Authors:* Enterprise Quantum Engineering Team
-*Classification:* Internal Technical Documentation
-{panel}
+]]></ac:plain-text-body>
+</ac:structured-macro>
+<h2>A.2 Parameter Quick Guide</h2>
+<table>
+  <tbody>
+    <tr>
+      <th>Parameter</th>
+      <th>Quick Setting</th>
+    </tr>
+    <tr>
+      <td>num_features</td>
+      <td>12</td>
+    </tr>
+    <tr>
+      <td>reps</td>
+      <td>10</td>
+    </tr>
+    <tr>
+      <td>gamma</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <td>alpha</td>
+      <td>0.5</td>
+    </tr>
+    <tr>
+      <td>C</td>
+      <td>0.5</td>
+    </tr>
+  </tbody>
+</table>
+<h2>A.3 Expected Performance</h2>
+<table>
+  <tbody>
+    <tr>
+      <th>Metric</th>
+      <th>Target</th>
+    </tr>
+    <tr>
+      <td>Accuracy</td>
+      <td>85-92%</td>
+    </tr>
+    <tr>
+      <td>Recall</td>
+      <td>82-90%</td>
+    </tr>
+    <tr>
+      <td>F1 Score</td>
+      <td>81-89%</td>
+    </tr>
+    <tr>
+      <td>Inference</td>
+      <td>&lt;200ms</td>
+    </tr>
+  </tbody>
+</table>
+<hr />
+<ac:structured-macro ac:name="panel">
+  <ac:parameter ac:name="title">Document Information</ac:parameter>
+  <ac:parameter ac:name="borderStyle">solid</ac:parameter>
+  <ac:parameter ac:name="borderColor">#ccc</ac:parameter>
+  <ac:parameter ac:name="titleBGColor">#f0f0f0</ac:parameter>
+  <ac:rich-text-body>
+<p><strong>Version:</strong> 1.0 <strong>Last Updated:</strong> January 2026 <strong>Authors:</strong> Enterprise Quantum Engineering Team <strong>Classification:</strong> Internal Technical Documentation</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+</div>
