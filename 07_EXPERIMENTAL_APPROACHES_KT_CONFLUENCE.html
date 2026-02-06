@@ -1,0 +1,855 @@
+<html>
+<body>
+
+<h1>Projected Quantum Features for Fraud Detection: Experimental Approaches KT</h1>
+<h2>Knowledge Transfer Document for Quantum Engineers / Scientists</h2>
+
+<hr/>
+
+<h1>1. Executive Summary</h1>
+
+<p>This document details three experimental approaches explored for integrating projected quantum features into a production fraud detection pipeline. Each approach uses tensor-network-simulated quantum circuits to derive features from classical transaction data, differing in how those features are consumed downstream.</p>
+
+<table border="1" cellpadding="8" cellspacing="0">
+<thead>
+<tr style="background-color:#f0f0f0;"><th>#</th><th>Approach</th><th>Classifier</th><th>Scale Tested</th><th>Outcome</th></tr>
+</thead>
+<tbody>
+<tr><td>1</td><td>PQK-SVM</td><td>SVM (precomputed kernel)</td><td>Up to ~30K samples</td><td>Did not scale; compute cost O(N<sup>2</sup>), degraded performance, memory limits</td></tr>
+<tr><td>2</td><td>Quantum Feature Projection (QFP)</td><td>LightGBM</td><td>~2.4M train / ~140M test</td><td>Quantum+classical features did not significantly outperform classical-only</td></tr>
+<tr><td>3</td><td>QFP with X/Y/Z Basis Decomposition</td><td>LightGBM + Neural Networks</td><td>~2.4M train / ~140M test</td><td>X-basis most aligned with ansatz; Y and Z bases introduced noise; no consistent gain</td></tr>
+</tbody>
+</table>
+
+<p><strong>Bottom line:</strong> Across all three approaches, the addition of quantum-derived features did not yield statistically meaningful improvement over the classical baseline for this dataset and scale.</p>
+
+<hr/>
+
+<h1>2. Common Technical Foundation</h1>
+
+<h2>2.1 Quantum Circuit Design</h2>
+
+<p>All approaches share the same core quantum encoding pipeline: classical feature values are embedded into a parameterized quantum circuit, the circuit is simulated via Matrix Product States (MPS), and single-qubit Pauli expectation values are extracted.</p>
+
+<h3>2.1.1 Angle Encoding</h3>
+
+<p>Each classical feature x<sub>i</sub> is mapped to a single qubit via a rotation gate. One qubit per feature means d features require d qubits.</p>
+
+<p><strong>Initialization:</strong></p>
+
+<p>All qubits begin in the computational basis state |0&gt;. A Hadamard gate is applied to each qubit to create an equal superposition:</p>
+
+<pre>|0&gt; --[H]--&gt; |+&gt; = (|0&gt; + |1&gt;) / sqrt(2)</pre>
+
+<p>This is necessary because rotation gates around the Z-axis have no observable effect on |0&gt; (an eigenstate of Z). The Hadamard moves the state to the equator of the Bloch sphere where rotations produce distinguishable states.</p>
+
+<p><strong>Feature encoding (single-qubit):</strong></p>
+
+<p>Two encoding schemes were tested:</p>
+
+<table border="1" cellpadding="8" cellspacing="0">
+<thead>
+<tr style="background-color:#f0f0f0;"><th>Scheme</th><th>Gate</th><th>Rotation Angle</th><th>Bloch Sphere Effect</th></tr>
+</thead>
+<tbody>
+<tr><td>Hamiltonian (primary)</td><td>Rz(x<sub>i</sub>)</td><td>&theta; = &gamma; &middot; x<sub>i</sub> / &pi;</td><td>Rotation around Z-axis</td></tr>
+<tr><td>Alternative</td><td>Rx(x<sub>i</sub>)</td><td>&theta; = x<sub>i</sub></td><td>Rotation around X-axis</td></tr>
+</tbody>
+</table>
+
+<p>For the <strong>Rz encoding</strong> used in the hamiltonian ansatz:</p>
+
+<pre>Rz(&theta;) = | e<sup>-i&theta;/2</sup>    0           |
+            |    0        e<sup>i&theta;/2</sup>    |</pre>
+
+<p>The gate applies a relative phase between |0&gt; and |1&gt; components proportional to the feature value. In the Bloch sphere picture, this rotates the state vector around the Z-axis by angle &theta;.</p>
+
+<p>The parameter <strong>&gamma;</strong> (rotation scaling factor) controls the sensitivity of the encoding:</p>
+<ul>
+<li>&gamma; = 1: full rotation range (used in production)</li>
+<li>&gamma; &lt; 1: compressed rotation range (prevents over-rotation for many qubits)</li>
+<li>The division by &pi; normalizes to the pytket half-turns convention</li>
+</ul>
+
+<p>For the <strong>Rx encoding</strong>:</p>
+
+<pre>Rx(&theta;) = | cos(&theta;/2)    -i&middot;sin(&theta;/2) |
+            | -i&middot;sin(&theta;/2)  cos(&theta;/2)   |</pre>
+
+<p>This rotates around the X-axis, which directly modulates the |0&gt; vs |1&gt; occupation probability rather than the relative phase. The choice between Rx and Rz affects which Pauli measurement bases are most sensitive to the encoded data.</p>
+
+<h3>2.1.2 Entanglement Structure</h3>
+
+<p>After single-qubit encoding, two-qubit entangling gates create correlations between feature-encoding qubits. Two entangling gate types were tested:</p>
+
+<p><strong>XXPhase gate</strong> (primary, hamiltonian ansatz):</p>
+
+<pre>R<sub>XX</sub>(&theta;) = exp(-i &middot; &theta; &middot; X<sub>1</sub> &otimes; X<sub>2</sub> / 2)</pre>
+
+<p>where X<sub>1</sub> &otimes; X<sub>2</sub> is the tensor product of Pauli-X operators on qubits 1 and 2.</p>
+
+<p>The rotation angle encodes a <strong>feature interaction term</strong>:</p>
+
+<pre>&theta;<sub>ij</sub> = &gamma;<sup>2</sup> &middot; (1 - x<sub>i</sub>) &middot; (1 - x<sub>j</sub>)</pre>
+
+<p>This means:</p>
+<ul>
+<li>When both features are near 1 (after normalization): minimal entanglement (&theta; &asymp; 0)</li>
+<li>When both features are near 0: maximum entanglement (&theta; &asymp; &gamma;<sup>2</sup>)</li>
+<li>The interaction is <strong>non-linear</strong> in the feature values</li>
+</ul>
+
+<p><strong>ZZPhase gate</strong> (alternative):</p>
+
+<pre>R<sub>ZZ</sub>(&theta;) = exp(-i &middot; &theta; &middot; Z<sub>1</sub> &otimes; Z<sub>2</sub> / 2)</pre>
+
+<p>The ZZ interaction commutes with Z-basis measurements, meaning it primarily affects X and Y expectation values while leaving Z expectations largely unchanged.</p>
+
+<p><strong>Entanglement topology &mdash; linear nearest-neighbor:</strong></p>
+
+<pre>Qubits:  q<sub>0</sub> --- q<sub>1</sub> --- q<sub>2</sub> --- ... --- q<sub>n-1</sub>
+
+Entanglement pairs: [(0,1), (2,3), (1,2), (3,4), ...]</pre>
+
+<p>The <code>entanglement_graph(nq, nn=1)</code> function generates non-overlapping gate layers for parallel execution:</p>
+<ul>
+<li>Layer 1: non-overlapping pairs (0,1), (2,3), (4,5), ...</li>
+<li>Layer 2: remaining pairs (1,2), (3,4), (5,6), ...</li>
+</ul>
+
+<p>This linear connectivity is chosen because:</p>
+<ol>
+<li>It matches MPS tensor network structure (enabling efficient simulation)</li>
+<li>It is physically realizable on near-term quantum hardware</li>
+<li>Deeper entanglement is achievable through repeated layers (reps parameter)</li>
+</ol>
+
+<p><strong>Number of entanglement layers:</strong> In production, <code>reps = 5</code> was used for QFP approaches and <code>reps = 1</code> was also tested. Increasing reps increases expressivity but exponentially increases tensor network complexity due to repeated SVD operations.</p>
+
+<h3>2.1.3 Complete Ansatz Structure</h3>
+
+<p>For a single data point x = [x<sub>1</sub>, x<sub>2</sub>, ..., x<sub>n</sub>], the circuit is:</p>
+
+<pre>U(x) = &prod;<sub>l=1</sub><sup>reps</sup> [ &prod;<sub>(i,j) &isin; E</sub> R<sub>XX</sub>(&gamma;<sup>2</sup>(1-x<sub>i</sub>)(1-x<sub>j</sub>)) &middot; &prod;<sub>i=1</sub><sup>n</sup> Rz(&gamma; &middot; x<sub>i</sub> / &pi;) ] &middot; H<sup>&otimes;n</sup>
+
+|&psi;(x)&gt; = U(x) |0&gt;<sup>&otimes;n</sup></pre>
+
+<p>Where E is the entanglement map (nearest-neighbor pairs).</p>
+
+<p>The circuit is constructed symbolically using <strong>pytket</strong> (Quantinuum's quantum SDK):</p>
+<ul>
+<li>Symbolic parameters (sympy Symbols) represent feature values</li>
+<li>At runtime, symbols are substituted with actual data values</li>
+<li>The circuit is compiled to a linear architecture using <code>DefaultMappingPass</code></li>
+<li>Non-adjacent two-qubit gates are decomposed via <code>DecomposeBRIDGE</code> (SWAP insertion)</li>
+</ul>
+
+<h2>2.2 Measurement: Bloch Vector Extraction</h2>
+
+<p>After circuit simulation, we extract the <strong>Bloch vector</strong> for each qubit. For qubit i in the n-qubit state |&psi;(x)&gt;:</p>
+
+<pre>&lt;X<sub>i</sub>&gt; = Tr(&rho;<sub>i</sub> &middot; &sigma;<sub>X</sub>)    in [-1, +1]
+&lt;Y<sub>i</sub>&gt; = Tr(&rho;<sub>i</sub> &middot; &sigma;<sub>Y</sub>)    in [-1, +1]
+&lt;Z<sub>i</sub>&gt; = Tr(&rho;<sub>i</sub> &middot; &sigma;<sub>Z</sub>)    in [-1, +1]</pre>
+
+<p>Where &rho;<sub>i</sub> = Tr<sub>all other qubits</sub>(|&psi;&gt;&lt;&psi;|) is the <strong>reduced density matrix</strong> of qubit i, obtained by tracing out all other qubits.</p>
+
+<p>The Pauli matrices:</p>
+
+<pre>&sigma;<sub>X</sub> = | 0  1 |    &sigma;<sub>Y</sub> = | 0  -i |    &sigma;<sub>Z</sub> = | 1   0 |
+          | 1  0 |              | i   0 |              | 0  -1 |</pre>
+
+<p>These three expectation values are the (x, y, z) coordinates of qubit i's state on the Bloch sphere. Together they completely characterize the single-qubit reduced state.</p>
+
+<p><strong>For n qubits, this yields 3n real-valued features:</strong></p>
+
+<pre>&Phi;(x) = [&lt;X<sub>1</sub>&gt;, &lt;Y<sub>1</sub>&gt;, &lt;Z<sub>1</sub>&gt;, &lt;X<sub>2</sub>&gt;, &lt;Y<sub>2</sub>&gt;, &lt;Z<sub>2</sub>&gt;, ..., &lt;X<sub>n</sub>&gt;, &lt;Y<sub>n</sub>&gt;, &lt;Z<sub>n</sub>&gt;]  &isin; &reals;<sup>3n</sup></pre>
+
+<p><strong>Physical interpretation:</strong></p>
+<ul>
+<li><strong>&lt;Z<sub>i</sub>&gt;</strong>: Measures the "computational basis" population. For |0&gt;, &lt;Z&gt; = +1; for |1&gt;, &lt;Z&gt; = -1.</li>
+<li><strong>&lt;X<sub>i</sub>&gt;</strong>: Measures the "superposition balance" between |+&gt; and |-&gt;. Sensitive to the real part of the off-diagonal coherence.</li>
+<li><strong>&lt;Y<sub>i</sub>&gt;</strong>: Measures the "phase coherence" between |0&gt; and |1&gt;. Sensitive to the imaginary part of the off-diagonal coherence.</li>
+</ul>
+
+<p><strong>Key insight for the Rz-encoded hamiltonian ansatz:</strong> Since Rz rotations act on the phase (Z-axis rotation), and the initial Hadamard places qubits on the equator, the Rz encoding primarily modulates X and Y expectations. The Z expectation is less directly coupled to the input features in this ansatz.</p>
+
+<h2>2.3 Tensor Network Simulation with ITensor</h2>
+
+<h3>2.3.1 Why Tensor Networks</h3>
+
+<p>Simulating a d-qubit quantum circuit naively requires storing a complex vector of dimension 2<sup>d</sup>. For d = 216 qubits, this is 2<sup>216</sup> &asymp; 10<sup>65</sup> complex numbers &mdash; physically impossible.</p>
+
+<p><strong>Matrix Product States (MPS)</strong> exploit the fact that states with bounded entanglement can be represented efficiently:</p>
+
+<pre>|&psi;&gt; = &sum;<sub>i<sub>1</sub>,i<sub>2</sub>,...,i<sub>n</sub></sub> A<sup>1</sup>[i<sub>1</sub>] &middot; A<sup>2</sup>[i<sub>2</sub>] &middot; ... &middot; A<sup>n</sup>[i<sub>n</sub>]  |i<sub>1</sub> i<sub>2</sub> ... i<sub>n</sub>&gt;</pre>
+
+<p>Where each A<sup>k</sup>[i<sub>k</sub>] is a matrix of dimension &chi;<sub>k-1</sub> &times; &chi;<sub>k</sub>, and &chi;<sub>k</sub> is the <strong>bond dimension</strong> at bond k.</p>
+
+<p><strong>Storage:</strong> O(n &middot; &chi;<sup>2</sup>) instead of O(2<sup>n</sup>)</p>
+
+<p>For our circuits with linear nearest-neighbor entanglement and shallow depth, the bond dimension &chi; remains manageable (empirically &chi; &lt; 50 for typical configurations), making simulation tractable even for 216 qubits.</p>
+
+<h3>2.3.2 ITensor C++ Implementation</h3>
+
+<p>The simulation engine is a custom C++ library (<code>helloitensor.cc</code>) using the <strong>ITensor</strong> library (Fishman et al., SciPost Physics Codebases 4, 2022) with a custom <code>qubit.h</code> site type, exposed to Python via <strong>pybind11</strong>.</p>
+
+<p><strong>Core function:</strong> <code>circuit_xyz_exp(gate_list, n_qubits) -&gt; [[&lt;X&gt;, &lt;Y&gt;, &lt;Z&gt;], ...]</code></p>
+
+<p><strong>Gate application algorithm:</strong></p>
+
+<p><u>1. Single-qubit gates (H, Rz, Rx, T):</u></p>
+<pre>psi.position(i)          // Move orthogonality center to site i
+G = op(sites, "Rz", i)   // Get gate operator
+new_tensor = G * psi(i)  // Contract gate with MPS tensor
+psi.set(i, new_tensor)   // Update MPS</pre>
+<p>Complexity: O(&chi;<sup>2</sup>). Does not increase bond dimension.</p>
+
+<p><u>2. Two-qubit gates (XXPhase, ZZPhase, SWAP, CZ):</u></p>
+<pre>psi.position(i)
+wf = psi(i) * psi(j)     // Merge two adjacent MPS tensors
+wf = G * wf              // Apply two-qubit gate
+[U, S, V] = SVD(wf)      // Decompose back into two tensors
+psi.set(i, U)            // Left tensor
+psi.set(j, S * V)        // Right tensor (singular values absorbed)</pre>
+<p>Complexity: O(&chi;<sup>3</sup>) due to SVD. Bond dimension can increase up to 2&chi; before truncation.</p>
+
+<p><strong>SVD truncation:</strong> Singular values below <code>Cutoff = 1E-10</code> are discarded. This controls the trade-off between accuracy and bond dimension growth. For our shallow circuits, truncation errors are negligible.</p>
+
+<p><strong>Gate encoding scheme</strong> (Python to C++ bridge):</p>
+
+<table border="1" cellpadding="8" cellspacing="0">
+<thead>
+<tr style="background-color:#f0f0f0;"><th>Code</th><th>Gate</th><th>Type</th><th>Parameters</th></tr>
+</thead>
+<tbody>
+<tr><td>0</td><td>H (Hadamard)</td><td>1-qubit</td><td>None</td></tr>
+<tr><td>1</td><td>Rx</td><td>1-qubit</td><td>angle (half-turns)</td></tr>
+<tr><td>2</td><td>Rz</td><td>1-qubit</td><td>angle (half-turns)</td></tr>
+<tr><td>3</td><td>XXPhase</td><td>2-qubit</td><td>angle (half-turns)</td></tr>
+<tr><td>4</td><td>ZZPhase</td><td>2-qubit</td><td>angle (half-turns)</td></tr>
+<tr><td>5</td><td>SWAP</td><td>2-qubit</td><td>None</td></tr>
+<tr><td>6</td><td>T</td><td>1-qubit</td><td>None</td></tr>
+<tr><td>7</td><td>CZ</td><td>2-qubit</td><td>None</td></tr>
+</tbody>
+</table>
+
+<p><strong>Expectation value extraction</strong> uses the mixed-canonical form of MPS:</p>
+
+<pre>tensor_mps.position(i+1);  // Move orthogonality center to site i
+&lt;X<sub>i</sub>&gt; = Re( &lt;&psi;| X_half |&psi;&gt; )  // Local contraction at site i
+&lt;Y<sub>i</sub>&gt; = Re( &lt;&psi;| Y_half |&psi;&gt; )
+&lt;Z<sub>i</sub>&gt; = Re( &lt;&psi;| Z_half |&psi;&gt; )</pre>
+
+<p>The <code>X_half</code>, <code>Y_half</code>, <code>Z_half</code> operators in <code>qubit.h</code> are the Pauli matrices scaled by 1/2 (consistent with spin-1/2 convention). In canonical form, the expectation value reduces to a local contraction at the single site, with complexity O(&chi;<sup>2</sup>) per qubit.</p>
+
+<h3>2.3.3 Computational Bottleneck: SVD in Entanglement</h3>
+
+<p>Every two-qubit gate application requires an SVD decomposition:</p>
+
+<pre>Total SVD operations per data point = reps &times; |E| (entanglement pairs)</pre>
+
+<p>For 216 qubits, 1 layer: |E| = 215 pairs, so 215 SVDs per data point.<br/>
+For 216 qubits, 5 layers: 1,075 SVDs per data point.</p>
+
+<p>Each SVD has complexity O(&chi;<sup>3</sup>), and &chi; grows with entanglement. This is the <strong>primary computational bottleneck</strong> of the entire pipeline, and the reason why:</p>
+<ul>
+<li>Circuit depth (reps) is kept shallow</li>
+<li>Only nearest-neighbor entanglement is used</li>
+<li>Bond dimension truncation is aggressive (cutoff = 1E-10)</li>
+</ul>
+
+<h2>2.4 Infrastructure and Hardware</h2>
+
+<p><strong>Compute platform:</strong> Google Cloud Dataproc (CPU-based)</p>
+
+<table border="1" cellpadding="8" cellspacing="0">
+<thead>
+<tr style="background-color:#f0f0f0;"><th>Resource</th><th>Specification</th></tr>
+</thead>
+<tbody>
+<tr><td>vCPUs</td><td>48-96 per cluster</td></tr>
+<tr><td>Parallelization</td><td>MPI (mpi4py + OpenMPI)</td></tr>
+<tr><td>Simulation</td><td>ITensor C++ (CPU, no GPU)</td></tr>
+<tr><td>Compilation</td><td>g++/clang++ with pybind11</td></tr>
+</tbody>
+</table>
+
+<p><strong>MPI parallelization strategy:</strong></p>
+
+<p>Data points are distributed across MPI ranks using round-robin chunking:</p>
+<pre>entries_per_chunk = ceil(N / n_procs)
+rank k processes: data[k*chunk : (k+1)*chunk]</pre>
+
+<p>For the SVM approach, kernel matrix tiles are computed in round-robin with message passing of Y chunks between ranks. For the QFP approach, each rank independently simulates circuits for its data chunk, then results are gathered via <code>MPI.reduce(SUM)</code>.</p>
+
+<h2>2.5 Dataset</h2>
+
+<p><strong>Production dataset</strong> (proprietary):</p>
+
+<table border="1" cellpadding="8" cellspacing="0">
+<thead>
+<tr style="background-color:#f0f0f0;"><th>Property</th><th>Value</th></tr>
+</thead>
+<tbody>
+<tr><td>Training set</td><td>~2.4 million transactions</td></tr>
+<tr><td>Test set</td><td>~140 million transactions</td></tr>
+<tr><td>Features</td><td>216 per transaction</td></tr>
+<tr><td>Task</td><td>Binary classification (fraud vs. legitimate)</td></tr>
+<tr><td>Class distribution</td><td>Highly imbalanced (production-grade)</td></tr>
+<tr><td>Baseline model</td><td>Production vendor LightGBM</td></tr>
+</tbody>
+</table>
+
+<p>The 216 features are normalized via StandardScaler before quantum encoding. For the SVM approach, an additional QuantileTransformer and MinMaxScaler([-&pi;, &pi;]) pipeline was applied.</p>
+
+<p><strong>Initial validation dataset:</strong> Elliptic Bitcoin (Weber et al., 2019)</p>
+<ul>
+<li>203,769 transactions, 46,564 labeled</li>
+<li>166 features, binary labels (illicit/licit)</li>
+<li>Used for initial proof-of-concept and parameter tuning</li>
+</ul>
+
+<hr/>
+
+<h1>3. Approach 1: Projected Quantum Kernel with SVM (PQK-SVM)</h1>
+
+<h2>3.1 Method Overview</h2>
+
+<p>This approach constructs a <strong>kernel matrix</strong> from the projected quantum features and uses it directly in an SVM classifier with a precomputed kernel.</p>
+
+<p><strong>Pipeline:</strong></p>
+
+<pre>Classical Data  --&gt;  Preprocessing  --&gt;  Quantum Circuit U(x)
+                                              |
+                                              v
+                                         MPS Simulation
+                                              |
+                                              v
+                                    Bloch Vectors: [&lt;X&gt;, &lt;Y&gt;, &lt;Z&gt;]<sub>i</sub>
+                                              |
+                                              v
+                         Pairwise Kernel: K(x, x') = exp(-&alpha; &middot; D(x, x'))
+                                              |
+                                              v
+                                    SVM(kernel="precomputed")
+                                              |
+                                              v
+                                      Classification</pre>
+
+<h2>3.2 Mathematical Formulation</h2>
+
+<h3>3.2.1 Projected Quantum Kernel Formula</h3>
+
+<p>Given two data points x and x', each encoded into quantum states |&psi;(x)&gt; and |&psi;(x')&gt;, the projected quantum kernel is:</p>
+
+<pre>K<sub>PQK</sub>(x, x') = exp( -&alpha; &middot; D(x, x') )</pre>
+
+<p>Where D is the <strong>projected distance</strong>:</p>
+
+<pre>D(x, x') = &sum;<sub>i=1</sub><sup>n</sup> 2 &middot; || &rho;<sub>i</sub>(x) - &rho;<sub>i</sub>(x') ||<sup>2</sup><sub>F</sub></pre>
+
+<p>Expanding using Bloch vectors:</p>
+
+<pre>D(x, x') = &sum;<sub>i=1</sub><sup>n</sup> [ (&lt;X<sub>i</sub>&gt;<sup>x</sup> - &lt;X<sub>i</sub>&gt;<sup>x'</sup>)<sup>2</sup>
+                       + (&lt;Y<sub>i</sub>&gt;<sup>x</sup> - &lt;Y<sub>i</sub>&gt;<sup>x'</sup>)<sup>2</sup>
+                       + (&lt;Z<sub>i</sub>&gt;<sup>x</sup> - &lt;Z<sub>i</sub>&gt;<sup>x'</sup>)<sup>2</sup> ]</pre>
+
+<p>This is the <strong>squared Euclidean distance</strong> between the projected feature vectors &Phi;(x) and &Phi;(x') in &reals;<sup>3n</sup>, wrapped in an RBF kernel.</p>
+
+<p><strong>The factor of 2</strong> comes from the relationship between Frobenius norm of density matrix differences and Bloch vector distances: ||&rho; - &sigma;||<sup>2</sup><sub>F</sub> = (1/2) &middot; ||r - s||<sup>2</sup> for single-qubit states.</p>
+
+<h3>3.2.2 Kernel Properties</h3>
+
+<p>The PQK satisfies Mercer's condition (positive semi-definite) because:</p>
+<ul>
+<li>It is an RBF kernel applied to a valid feature map</li>
+<li>K(x, x) = 1 for all x (self-similarity)</li>
+<li>K(x, x') = K(x', x) (symmetry)</li>
+<li>0 &lt; K(x, x') &le; 1 for all pairs</li>
+</ul>
+
+<p><strong>&alpha; (kernel bandwidth):</strong> Controls the sharpness of the kernel.</p>
+<ul>
+<li>Large &alpha;: only very similar quantum states yield high kernel values (sharp boundary)</li>
+<li>Small &alpha;: broader similarity, smoother decision boundary</li>
+<li>Analogous to &gamma; in the classical RBF kernel</li>
+</ul>
+
+<h3>3.2.3 Relationship to Classical RBF</h3>
+
+<p>The PQK is mathematically equivalent to an RBF kernel in a 3n-dimensional feature space:</p>
+
+<pre>K<sub>PQK</sub>(x, x') = K<sub>RBF</sub>(&Phi;(x), &Phi;(x'))
+
+where &Phi;(x) = [&lt;X<sub>1</sub>&gt;, &lt;Y<sub>1</sub>&gt;, &lt;Z<sub>1</sub>&gt;, ..., &lt;X<sub>n</sub>&gt;, &lt;Y<sub>n</sub>&gt;, &lt;Z<sub>n</sub>&gt;]</pre>
+
+<p>The "quantum advantage" claim is that the non-linear feature map x &rarr; &Phi;(x) (mediated by the quantum circuit) captures correlations that are hard to construct classically.</p>
+
+<h2>3.3 Implementation Details</h2>
+
+<p><strong>Codebase:</strong> <code>ITensor_C/main.py</code> + <code>ITensor_C/projected_kernel_ansatz.py</code></p>
+
+<p><strong>Preprocessing pipeline:</strong></p>
+
+<pre># 1. Quantile transform to Gaussian distribution (handles outliers)
+transformer = QuantileTransformer(output_distribution='normal')
+X = transformer.fit_transform(X)
+
+# 2. Standardize to zero mean, unit variance
+scaler = StandardScaler()
+X = scaler.fit_transform(X)
+
+# 3. Scale to quantum rotation range [-&pi;, &pi;]
+minmax = MinMaxScaler((-np.pi, np.pi))
+X = minmax.fit_transform(X)
+
+# 4. Select top-k features (k = num_qubits)
+X_reduced = X[:, 0:num_features]</pre>
+
+<p><strong>Kernel matrix construction:</strong></p>
+
+<p>The N &times; N training kernel matrix requires N<sup>2</sup> / 2 unique entries (exploiting symmetry). Each entry requires:</p>
+<ol>
+<li>Simulating circuit for data point x (if not cached): O(n &middot; reps &middot; &chi;<sup>3</sup>)</li>
+<li>Simulating circuit for data point x': O(n &middot; reps &middot; &chi;<sup>3</sup>)</li>
+<li>Computing the distance D(x, x'): O(3n)</li>
+<li>Computing exp(-&alpha; &middot; D): O(1)</li>
+</ol>
+
+<p>With MPI parallelization, the kernel matrix is tiled across P processes. Y chunks are passed in round-robin to compute all tiles without storing all data on one rank.</p>
+
+<p><strong>SVM training:</strong></p>
+
+<pre># Grid search over regularization parameter C
+C_values = [2, 1.5, 1, 0.5, 0.1, 0.05, 0.01]
+for C in C_values:
+    svm = SVC(kernel="precomputed", C=C, tol=1e-5)
+    svm.fit(K_train, train_labels)
+    predictions = svm.predict(K_test)</pre>
+
+<p>A classical RBF-SVM baseline was also trained for direct comparison:</p>
+
+<pre>svm_rbf = SVC(kernel="rbf", C=C, tol=1e-5)
+svm_rbf.fit(X_train, train_labels)</pre>
+
+<h2>3.4 Parameters Used</h2>
+
+<table border="1" cellpadding="8" cellspacing="0">
+<thead>
+<tr style="background-color:#f0f0f0;"><th>Parameter</th><th>Value</th><th>Rationale</th></tr>
+</thead>
+<tbody>
+<tr><td>num_features</td><td>12-20</td><td>Limited by SVM scaling</td></tr>
+<tr><td>reps</td><td>2-10</td><td>Tested range; more reps = deeper circuit</td></tr>
+<tr><td>gamma</td><td>0.5-1.0</td><td>Rotation scaling</td></tr>
+<tr><td>alpha</td><td>0.5</td><td>Kernel bandwidth</td></tr>
+<tr><td>Entanglement</td><td>XXPhase (Hamiltonian), ZZPhase (alt.)</td><td>Both tested</td></tr>
+<tr><td>Encoding</td><td>Rz (primary), Rx (alternative)</td><td>Both tested</td></tr>
+<tr><td>SVM C</td><td>Grid search [0.01, 2.0]</td><td>Regularization</td></tr>
+<tr><td>Preprocessing</td><td>QuantileTransformer + StandardScaler + MinMaxScaler</td><td>Full pipeline</td></tr>
+</tbody>
+</table>
+
+<h2>3.5 Scale and Performance</h2>
+
+<p><strong>Tested scale:</strong> Up to approximately 30,000 samples from the production dataset.</p>
+
+<p><strong>Computational cost analysis for N = 30,000:</strong></p>
+
+<pre>Kernel matrix entries:      N<sup>2</sup> / 2 = 450,000,000
+Circuit simulations:        2N = 60,000  (unique data points)
+Per-simulation cost:        O(n &middot; reps &middot; &chi;<sup>3</sup>) ~ 50-100 ms (for n=12-20)
+Total simulation time:      ~50-100 minutes (with 48 MPI ranks)
+Kernel distance computation: ~minutes (dominated by simulation)
+Memory for kernel matrix:   N<sup>2</sup> &times; 8 bytes = ~7.2 GB (float64)</pre>
+
+<p><strong>Why this approach did not scale:</strong></p>
+
+<ol>
+<li><strong>O(N<sup>2</sup>) kernel matrix computation:</strong> For 2.4M training samples, the kernel matrix would have ~2.88 &times; 10<sup>12</sup> entries, requiring ~23 TB of memory and years of compute time.</li>
+<li><strong>SVM scaling:</strong> Even with a precomputed kernel, SVM training is O(N<sup>2</sup>) to O(N<sup>3</sup>) in the number of samples, making it infeasible for millions of data points.</li>
+<li><strong>Performance degradation:</strong> At 30K samples, classification metrics did not justify the computational cost compared to classical baselines. The projected quantum kernel did not demonstrate a clear advantage over the RBF kernel at this scale.</li>
+<li><strong>Memory constraints:</strong> The 48-96 vCPU Dataproc cluster could not hold kernel matrices larger than ~30K &times; 30K in distributed memory.</li>
+</ol>
+
+<h2>3.6 Outcome</h2>
+
+<p>The PQK-SVM approach was abandoned for the production pipeline due to the fundamental O(N<sup>2</sup>) scaling barrier. It remains viable for small-sample regimes (N &lt; 5,000) or when kernel-based interpretability is valued, but cannot serve production-scale fraud detection with millions of transactions.</p>
+
+<hr/>
+
+<h1>4. Approach 2: Quantum Feature Projection (QFP)</h1>
+
+<h2>4.1 Method Overview</h2>
+
+<p>To overcome the O(N<sup>2</sup>) scaling limitation of the kernel approach, Approach 2 <strong>explicitly computes the projected feature vectors</strong> and passes them directly to a tree-based classifier. This reduces the quantum computation from O(N<sup>2</sup>) kernel entries to O(N) feature extractions.</p>
+
+<p><strong>Pipeline:</strong></p>
+
+<pre>Classical Data (N &times; d)  --&gt;  StandardScaler  --&gt;  Quantum Circuit U(x<sub>i</sub>)
+                                                       |
+                                                       v
+                                                  MPS Simulation
+                                                       |
+                                                       v
+                                            Bloch Vectors: &Phi;(x<sub>i</sub>) &isin; &reals;<sup>3d</sup>
+                                                       |
+                                                       v
+                                        Concatenate: [x<sub>i</sub>, &Phi;(x<sub>i</sub>)] &isin; &reals;<sup>4d</sup>
+                                                       |
+                                                       v
+                                                 LightGBM Classifier
+                                                       |
+                                                       v
+                                                 Classification</pre>
+
+<h2>4.2 Key Difference from Approach 1</h2>
+
+<p>Instead of computing pairwise kernel values between all N<sup>2</sup> pairs, we compute the quantum feature vector &Phi;(x) for each of the N data points independently. The kernel is now <strong>implicit</strong> &mdash; LightGBM learns its own decision boundaries in the augmented feature space.</p>
+
+<table border="1" cellpadding="8" cellspacing="0">
+<thead>
+<tr style="background-color:#f0f0f0;"><th>Aspect</th><th>Approach 1 (PQK-SVM)</th><th>Approach 2 (QFP)</th></tr>
+</thead>
+<tbody>
+<tr><td>Output of quantum step</td><td>N &times; N kernel matrix</td><td>N &times; 3d feature matrix</td></tr>
+<tr><td>Scaling</td><td>O(N<sup>2</sup>)</td><td>O(N)</td></tr>
+<tr><td>Classifier</td><td>SVM (precomputed)</td><td>LightGBM</td></tr>
+<tr><td>Feature representation</td><td>Implicit (kernel)</td><td>Explicit (feature vectors)</td></tr>
+<tr><td>Production scalable</td><td>No (&gt;30K infeasible)</td><td>Yes (tested on 2.4M/140M)</td></tr>
+</tbody>
+</table>
+
+<h2>4.3 Implementation Details</h2>
+
+<p><strong>Codebase:</strong> <code>dataproc files/main.py</code> + <code>dataproc files/generate_pqf.py</code> + <code>dataproc files/projected_quantum_features.py</code></p>
+
+<h3>4.3.1 Preprocessing</h3>
+
+<p>Simpler than Approach 1 &mdash; only StandardScaler is applied:</p>
+
+<pre># StandardScaler only (no QuantileTransformer, no MinMaxScaler)
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+# Scaler is saved to ./model/scaler.pkl for consistent test-time normalization</pre>
+
+<p>The rationale for simpler preprocessing: LightGBM is invariant to monotonic transformations of features, so the additional QuantileTransformer and MinMaxScaler steps that were necessary for SVM (which is sensitive to feature scaling) are not required.</p>
+
+<h3>4.3.2 Quantum Feature Generation</h3>
+
+<p>The <code>generate_projectedQfeatures()</code> function orchestrates the full pipeline:</p>
+
+<pre>def generate_projectedQfeatures(data_feature, reps, gamma, target_label, info,
+                                 slice_size=50000, train_flag=False):
+    # 1. Scale features
+    classical_features = apply_scaling(data_feature, train_flag)
+
+    # 2. Create quantum ansatz (hamiltonian, reps=5, gamma=1)
+    ansatz = create_ansatz(num_features, reps, gamma)
+
+    # 3. Process in slices of 50,000 to manage memory
+    for each slice:
+        quantum_features = build_qf_matrix(mpi_comm, ansatz, X=slice)
+        combined = np.concatenate((classical_slice, quantum_features), axis=1)
+
+    # 4. Save combined feature array
+    np.save(f'./pqf_arr/{info}_mini_arr.npy', final_features)</pre>
+
+<p><strong>Sliced processing:</strong> Data is processed in chunks of 50,000 samples to avoid memory exhaustion. Each chunk is independently MPI-parallelized.</p>
+
+<p><strong>Output feature dimensions:</strong></p>
+
+<table border="1" cellpadding="8" cellspacing="0">
+<thead>
+<tr style="background-color:#f0f0f0;"><th>Component</th><th>Dimension</th><th>Description</th></tr>
+</thead>
+<tbody>
+<tr><td>Classical features</td><td>d = 216</td><td>Original normalized transaction features</td></tr>
+<tr><td>Quantum features</td><td>3d = 648</td><td>X, Y, Z expectations per qubit</td></tr>
+<tr><td><strong>Combined</strong></td><td><strong>4d = 864</strong></td><td>Concatenation of classical + quantum</td></tr>
+</tbody>
+</table>
+
+<h3>4.3.3 Model Training</h3>
+
+<p>Two LightGBM models are trained in parallel for direct comparison:</p>
+
+<p><strong>1. Classical-only model:</strong></p>
+<pre>model_train(classical_features, labels, model_name='classical_fraud_model_v')</pre>
+
+<p><strong>2. Quantum-augmented model:</strong></p>
+<pre>model_train(combined_features, labels, model_name='qiml_fraud_model_v')</pre>
+
+<p><strong>LightGBM hyperparameters:</strong></p>
+
+<pre>params = {
+    'subsample': 1.0,
+    'reg_lambda': 0.5,        # L2 regularization
+    'reg_alpha': 0.1,         # L1 regularization
+    'num_leaves': 40,
+    'n_estimators': 300,
+    'min_child_samples': 30,
+    'max_depth': 15,
+    'learning_rate': 0.1,
+    'colsample_bytree': 0.8,
+}</pre>
+
+<p><strong>Note on hyperparameter optimization:</strong> GridSearchCV was impractical due to the large feature space (864 dimensions) and dataset scale (~2.4M samples). The parameters above were hand-tuned. This is a known limitation &mdash; it is possible that more exhaustive tuning could reveal small performance differences between classical and quantum-augmented models.</p>
+
+<h2>4.4 Parameters Used</h2>
+
+<table border="1" cellpadding="8" cellspacing="0">
+<thead>
+<tr style="background-color:#f0f0f0;"><th>Parameter</th><th>Value</th><th>Rationale</th></tr>
+</thead>
+<tbody>
+<tr><td>num_features (qubits)</td><td>216</td><td>One qubit per feature (all features used)</td></tr>
+<tr><td>reps</td><td>5</td><td>Moderate depth; balance expressivity vs. compute</td></tr>
+<tr><td>gamma</td><td>1</td><td>Full rotation scaling (alpha=1 in user notation)</td></tr>
+<tr><td>ansatz</td><td>hamiltonian</td><td>Rz encoding + XXPhase entanglement</td></tr>
+<tr><td>hadamard_init</td><td>True</td><td>Required for Rz encoding sensitivity</td></tr>
+<tr><td>slice_size</td><td>50,000</td><td>Memory management for MPI processing</td></tr>
+<tr><td>Preprocessing</td><td>StandardScaler only</td><td>Sufficient for tree-based models</td></tr>
+</tbody>
+</table>
+
+<h2>4.5 Results</h2>
+
+<p><strong>Classical + Quantum features did not significantly outperform classical-only features.</strong></p>
+
+<p>The LightGBM models trained on the 864-dimensional combined feature space and the 216-dimensional classical feature space achieved nearly identical performance across all metrics (accuracy, precision, recall, F1, AUC-ROC).</p>
+
+<p><strong>Possible explanations:</strong></p>
+
+<ol>
+<li><strong>Redundant information:</strong> The quantum features, being non-linear transformations of the same classical features, may not add information beyond what LightGBM can already extract through its own non-linear splits.</li>
+<li><strong>Shallow entanglement:</strong> With only nearest-neighbor connectivity and limited depth, the quantum circuit may not generate sufficiently complex feature interactions to surpass what a 300-tree ensemble can learn.</li>
+<li><strong>Feature dilution:</strong> Adding 648 potentially noisy quantum features to 216 informative classical features may cause LightGBM to waste splits on uninformative dimensions, even with colsample_bytree=0.8.</li>
+<li><strong>Ansatz mismatch:</strong> The hamiltonian ansatz may not be well-suited to the specific data distribution of this fraud detection dataset.</li>
+</ol>
+
+<hr/>
+
+<h1>5. Approach 3: QFP with X/Y/Z Basis Decomposition</h1>
+
+<h2>5.1 Motivation</h2>
+
+<p>Given that the full 648 quantum features (X + Y + Z for 216 qubits) did not improve performance, Approach 3 investigates <strong>which measurement bases carry useful information</strong> by decomposing the quantum features into their X, Y, and Z components and testing them independently.</p>
+
+<h2>5.2 Feature Decomposition</h2>
+
+<p>The 648 quantum features per data point are structured as:</p>
+
+<pre>&Phi;(x) = [&lt;X<sub>1</sub>&gt;, &lt;Y<sub>1</sub>&gt;, &lt;Z<sub>1</sub>&gt;, &lt;X<sub>2</sub>&gt;, &lt;Y<sub>2</sub>&gt;, &lt;Z<sub>2</sub>&gt;, ..., &lt;X<sub>216</sub>&gt;, &lt;Y<sub>216</sub>&gt;, &lt;Z<sub>216</sub>&gt;]</pre>
+
+<p>This is decomposed into three basis-specific vectors:</p>
+
+<table border="1" cellpadding="8" cellspacing="0">
+<thead>
+<tr style="background-color:#f0f0f0;"><th>Basis Vector</th><th>Dimension</th><th>Content</th></tr>
+</thead>
+<tbody>
+<tr><td>&Phi;<sub>X</sub>(x)</td><td>216</td><td>[&lt;X<sub>1</sub>&gt;, &lt;X<sub>2</sub>&gt;, ..., &lt;X<sub>216</sub>&gt;]</td></tr>
+<tr><td>&Phi;<sub>Y</sub>(x)</td><td>216</td><td>[&lt;Y<sub>1</sub>&gt;, &lt;Y<sub>2</sub>&gt;, ..., &lt;Y<sub>216</sub>&gt;]</td></tr>
+<tr><td>&Phi;<sub>Z</sub>(x)</td><td>216</td><td>[&lt;Z<sub>1</sub>&gt;, &lt;Z<sub>2</sub>&gt;, ..., &lt;Z<sub>216</sub>&gt;]</td></tr>
+</tbody>
+</table>
+
+<h2>5.3 Experimental Configurations</h2>
+
+<p>Multiple feature combinations were tested:</p>
+
+<table border="1" cellpadding="8" cellspacing="0">
+<thead>
+<tr style="background-color:#f0f0f0;"><th>Configuration</th><th>Total Dims</th><th>Components</th></tr>
+</thead>
+<tbody>
+<tr><td>Classical only</td><td>216</td><td>Original features</td></tr>
+<tr><td>Classical + X</td><td>432</td><td>216 classical + 216 X-basis</td></tr>
+<tr><td>Classical + Y</td><td>432</td><td>216 classical + 216 Y-basis</td></tr>
+<tr><td>Classical + Z</td><td>432</td><td>216 classical + 216 Z-basis</td></tr>
+<tr><td>Classical + X + Y + Z</td><td>864</td><td>Full combined (Approach 2)</td></tr>
+<tr><td>X-basis only</td><td>216</td><td>Quantum X features alone</td></tr>
+<tr><td>Y-basis only</td><td>216</td><td>Quantum Y features alone</td></tr>
+<tr><td>Z-basis only</td><td>216</td><td>Quantum Z features alone</td></tr>
+<tr><td>X + Y + Z only</td><td>648</td><td>All quantum features, no classical</td></tr>
+</tbody>
+</table>
+
+<h2>5.4 Results and Analysis</h2>
+
+<h3>5.4.1 Basis-wise Performance</h3>
+
+<p><strong>X-basis + classical:</strong> Performed closest to the classical-only baseline. Of the three Pauli bases, X-basis features were the most informative.</p>
+
+<p><strong>Y-basis and Z-basis:</strong> Often added noise, and in some configurations actively degraded performance relative to classical-only.</p>
+
+<p><strong>Reduced feature space:</strong> Even with the most informative basis (X-only), the reduction from 864 to 432 features did not yield a consistent performance gain.</p>
+
+<h3>5.4.2 Why X-basis Dominates</h3>
+
+<p>For the <strong>hamiltonian ansatz with Rz encoding</strong>:</p>
+
+<ol>
+<li>The initial Hadamard gate places each qubit at the equator of the Bloch sphere: |+&gt; = (|0&gt; + |1&gt;)/sqrt(2), which has Bloch coordinates (1, 0, 0) &mdash; pointing along the <strong>X-axis</strong>.</li>
+<li><strong>Rz(&theta;)</strong> rotates the state around the Z-axis on the equator, moving it in the X-Y plane. The X and Y expectations oscillate as cos(&theta;) and sin(&theta;) respectively.</li>
+<li>The <strong>XXPhase entanglement</strong> creates correlations primarily in the X-X direction, which directly modulates the X expectations of both qubits.</li>
+<li><strong>Z expectations</strong> are largely unaffected by Rz rotations (Z is an eigenaxis of Rz). The Z-component of the Bloch vector changes primarily through entanglement-induced mixed-state effects, which are weaker in a shallow circuit.</li>
+</ol>
+
+<p>Therefore:</p>
+<ul>
+<li><strong>&lt;X<sub>i</sub>&gt;</strong> directly encodes the feature value x<sub>i</sub> via cos(&gamma; &middot; x<sub>i</sub> / &pi;) plus entanglement corrections &rarr; most informative</li>
+<li><strong>&lt;Y<sub>i</sub>&gt;</strong> encodes the feature via sin(&gamma; &middot; x<sub>i</sub> / &pi;) plus entanglement corrections &rarr; partially informative but phase-sensitive</li>
+<li><strong>&lt;Z<sub>i</sub>&gt;</strong> primarily reflects entanglement-induced decoherence, not direct feature encoding &rarr; least informative, mostly noise</li>
+</ul>
+
+<h3>5.4.3 Neural Network Experiments</h3>
+
+<p>To test whether the apparent redundancy of quantum features was an artifact of tree-based models (which cannot easily exploit correlations between X, Y, Z components of the same qubit), fully connected neural networks were also evaluated.</p>
+
+<p><strong>Hypothesis:</strong> X, Y, Z components represent correlated quantum information (they are constrained to the Bloch sphere: &lt;X&gt;<sup>2</sup> + &lt;Y&gt;<sup>2</sup> + &lt;Z&gt;<sup>2</sup> &le; 1). Tree-based models split on individual features independently and cannot easily exploit this joint structure. Neural networks, with their dense layers, could potentially learn useful cross-basis interactions.</p>
+
+<p><strong>Outcome:</strong> Neural network performance closely matched LightGBM results. No clear advantage was observed from including the full Bloch vector (X + Y + Z) over X-basis alone. This suggests the lack of improvement is not a classifier limitation but a fundamental property of the quantum features themselves.</p>
+
+<h3>5.4.4 Measurement Constraints on Real Hardware</h3>
+
+<p>An important consideration for future hardware deployment:</p>
+
+<p>On <strong>real quantum hardware</strong>, you can only measure one basis per circuit execution. To obtain X, Y, and Z expectations, you need three separate circuit preparations:</p>
+<ul>
+<li>X measurement: append H before measurement</li>
+<li>Y measurement: append S<sup>&dagger;</sup> then H before measurement</li>
+<li>Z measurement: measure directly in computational basis</li>
+</ul>
+
+<p>Due to quantum uncertainty (measurement collapse), these three measurements correspond to <strong>different instances</strong> of the quantum state, not the same one. The (X, Y, Z) vector obtained from hardware is therefore a statistical estimate from independent samples, not a single-shot Bloch vector.</p>
+
+<p>In tensor network simulation, we have simultaneous access to all three components from the same MPS. This is a simulation advantage that would not transfer to hardware. The finding that only X-basis features are useful is therefore <strong>favorable for hardware deployment</strong> &mdash; it reduces the required circuit executions by 3x.</p>
+
+<h2>5.5 Implications</h2>
+
+<ol>
+<li><strong>Dimensionality reduction is justified:</strong> Using only Classical + X-basis (432 features) is as good as the full 864-dimensional space, with half the dimensionality and 3x fewer quantum measurements needed.</li>
+<li><strong>Ansatz design matters:</strong> The choice of encoding gate (Rz) directly determines which measurement basis is most informative. An Rx-encoded ansatz would likely shift the informativeness to a different basis.</li>
+<li><strong>Shallow circuits limit expressivity:</strong> With only nearest-neighbor entanglement and a few layers, the quantum circuit acts as a relatively simple non-linear transformation. LightGBM with 300 trees over 216 features may already be capturing equivalent or superior non-linear structure.</li>
+</ol>
+
+<hr/>
+
+<h1>6. Comparative Analysis</h1>
+
+<h2>6.1 Approach Comparison</h2>
+
+<table border="1" cellpadding="8" cellspacing="0">
+<thead>
+<tr style="background-color:#f0f0f0;"><th>Dimension</th><th>Approach 1 (PQK-SVM)</th><th>Approach 2 (QFP)</th><th>Approach 3 (QFP + Basis Split)</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Quantum output</strong></td><td>Pairwise kernel K(x,x')</td><td>Feature vector &Phi;(x) &isin; &reals;<sup>648</sup></td><td>Decomposed: &Phi;<sub>X</sub>, &Phi;<sub>Y</sub>, &Phi;<sub>Z</sub> each &isin; &reals;<sup>216</sup></td></tr>
+<tr><td><strong>Classical input</strong></td><td>12-20 features</td><td>216 features</td><td>216 features</td></tr>
+<tr><td><strong>Classifier</strong></td><td>SVM</td><td>LightGBM</td><td>LightGBM + Neural Network</td></tr>
+<tr><td><strong>Scaling</strong></td><td>O(N<sup>2</sup>)</td><td>O(N)</td><td>O(N)</td></tr>
+<tr><td><strong>Max samples tested</strong></td><td>~30K</td><td>~2.4M train / 140M test</td><td>~2.4M train / 140M test</td></tr>
+<tr><td><strong>Preprocessing</strong></td><td>QT + SS + MMS</td><td>SS only</td><td>SS only</td></tr>
+<tr><td><strong>Quantum features used</strong></td><td>All (implicit in kernel)</td><td>All X,Y,Z</td><td>Decomposed by basis</td></tr>
+<tr><td><strong>Performance vs baseline</strong></td><td>Did not justify compute cost</td><td>Nearly identical to classical-only</td><td>X-basis closest; Y,Z add noise</td></tr>
+<tr><td><strong>Compute cost</strong></td><td>Very high (kernel matrix)</td><td>High (per-sample simulation)</td><td>Same as Approach 2</td></tr>
+<tr><td><strong>Production viable</strong></td><td>No</td><td>Marginal (no gain)</td><td>Marginal (no gain)</td></tr>
+</tbody>
+</table>
+
+<h2>6.2 Scaling Analysis</h2>
+
+<p><strong>Per data-point quantum simulation cost:</strong></p>
+
+<pre>Circuit: 216 qubits, 5 reps, ~1075 two-qubit gates
+Time per simulation: ~100-500 ms (depending on bond dimension)</pre>
+
+<p><strong>Total quantum computation time estimates (48 MPI ranks):</strong></p>
+
+<table border="1" cellpadding="8" cellspacing="0">
+<thead>
+<tr style="background-color:#f0f0f0;"><th>Dataset</th><th>N</th><th>Simulations</th><th>Est. Time (48 ranks)</th></tr>
+</thead>
+<tbody>
+<tr><td>SVM kernel (30K)</td><td>30,000</td><td>60,000 + N<sup>2</sup>/2 kernel ops</td><td>Hours to days</td></tr>
+<tr><td>QFP train (2.4M)</td><td>2,400,000</td><td>2,400,000</td><td>~14-70 hours</td></tr>
+<tr><td>QFP test (140M)</td><td>140,000,000</td><td>140,000,000</td><td>~34-170 days</td></tr>
+</tbody>
+</table>
+
+<p>The test-set inference time for 140M samples is a major practical concern, even with aggressive parallelization.</p>
+
+<h2>6.3 Bond Dimension Behavior</h2>
+
+<p>For 216 qubits with linear nearest-neighbor entanglement:</p>
+
+<table border="1" cellpadding="8" cellspacing="0">
+<thead>
+<tr style="background-color:#f0f0f0;"><th>reps</th><th>Typical max &chi;</th><th>Memory per MPS</th><th>SVD cost factor</th></tr>
+</thead>
+<tbody>
+<tr><td>1</td><td>~4-8</td><td>~50 KB</td><td>Low</td></tr>
+<tr><td>5</td><td>~16-50</td><td>~5 MB</td><td>Moderate</td></tr>
+<tr><td>10</td><td>~50-200</td><td>~50 MB</td><td>High</td></tr>
+</tbody>
+</table>
+
+<p>The shallow circuits keep bond dimension manageable, which is what makes 216-qubit simulation feasible on CPUs. However, this also limits the entanglement (and thus the expressivity) of the quantum features.</p>
+
+<hr/>
+
+<h1>7. Key Findings</h1>
+
+<h2>7.1 What We Learned</h2>
+
+<ol>
+<li><strong>PQK-SVM does not scale to production volumes.</strong> The O(N<sup>2</sup>) kernel matrix is fundamentally incompatible with millions of training samples, regardless of parallelization.</li>
+<li><strong>Projected quantum features from a shallow hamiltonian ansatz do not improve fraud detection over classical features alone</strong> at the scale tested (2.4M train / 140M test).</li>
+<li><strong>X-basis Pauli expectations are the most informative</strong> quantum features for the Rz-encoded hamiltonian ansatz. Y and Z bases primarily contribute noise.</li>
+<li><strong>The lack of improvement is classifier-agnostic.</strong> Both LightGBM (tree-based) and neural networks (dense layers) converge to the same conclusion &mdash; quantum features are not adding predictive value beyond what is already captured by the 216 classical features.</li>
+<li><strong>Tensor network simulation is computationally feasible</strong> for 216-qubit shallow circuits on CPU clusters, but the per-sample cost (~100-500 ms) creates practical bottlenecks at production scale.</li>
+</ol>
+
+<h2>7.2 Possible Explanations</h2>
+
+<ol>
+<li><strong>Insufficient circuit depth:</strong> Shallow circuits with 1-5 layers of nearest-neighbor entanglement may not generate features complex enough to surpass 300-tree LightGBM ensembles. Deeper circuits would increase expressivity but are computationally prohibitive with MPS simulation.</li>
+<li><strong>Ansatz-data mismatch:</strong> The hamiltonian ansatz may not be well-suited to the statistical structure of this fraud dataset. Different ansatz designs (e.g., data-re-uploading, hardware-efficient ansatz, problem-specific circuits) may yield different results.</li>
+<li><strong>Feature saturation:</strong> LightGBM with 216 features, 300 trees, and max depth 15 may already be near the Bayes-optimal classifier for this data distribution, leaving no room for quantum feature improvement.</li>
+<li><strong>Limited hyperparameter tuning:</strong> The LightGBM hyperparameters were not exhaustively optimized due to scale constraints. GridSearchCV over the 864-dimensional quantum-augmented space was impractical.</li>
+</ol>
+
+<h2>7.3 Recommendations for Future Work</h2>
+
+<ol>
+<li><strong>Data-re-uploading circuits:</strong> Instead of encoding features once, re-upload classical features at each layer. This creates more complex non-linear feature maps without increasing qubit count.</li>
+<li><strong>Trainable quantum circuits:</strong> Use variational circuits where gate parameters are optimized (e.g., via gradient descent) to maximize a classification objective, rather than using fixed data-dependent rotations.</li>
+<li><strong>Feature selection before encoding:</strong> Instead of encoding all 216 features, use classical feature importance to select a smaller set of highly informative features and encode them into a deeper circuit.</li>
+<li><strong>Alternative entanglement topologies:</strong> Star graphs, all-to-all connectivity (via SWAP networks), or problem-specific connectivity informed by feature correlation structure.</li>
+<li><strong>GPU-accelerated simulation:</strong> Migrating from CPU-based ITensor to GPU-accelerated tensor network libraries (cuTensorNet, TensorCircuit) could reduce per-sample simulation time by 10-100x.</li>
+</ol>
+
+<hr/>
+
+<h1>8. References</h1>
+
+<ol>
+<li>Huang, H.-Y., Broughton, M., Mohseni, M., et al. (2021). "Power of data in quantum machine learning." <em>Nature Communications</em>, 12, 2631. &mdash; Introduced projected quantum kernels.</li>
+<li>Havlicek, V., Corcoles, A.D., Temme, K., et al. (2019). "Supervised learning with quantum-enhanced feature spaces." <em>Nature</em>, 567, 209-212. &mdash; Original quantum feature map framework.</li>
+<li>Fishman, M., White, S.R., &amp; Stoudenmire, E.M. (2022). "The ITensor Software Library for Tensor Network Calculations." <em>SciPost Physics Codebases</em>, 4. &mdash; ITensor library.</li>
+<li>Weber, M., et al. (2019). "Anti-Money Laundering in Bitcoin: Experimenting with Graph Convolutional Networks for Financial Forensics." KDD Workshop. &mdash; Elliptic Bitcoin dataset.</li>
+<li>Heredge, J., et al. (2023). "Quantum Multiple Kernel Learning in Financial Classification Tasks." arXiv:2312.00260.</li>
+<li>Vasquez, A.C., et al. (2023). "Financial Fraud Detection: A Comparative Study of Quantum Machine Learning Models." arXiv:2308.05237.</li>
+</ol>
+
+<hr/>
+
+<p><em>Document Version: 1.0</em><br/>
+<em>Last Updated: February 2026</em><br/>
+<em>Classification: Internal Technical KT</em></p>
+
+</body>
+</html>
