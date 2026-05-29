@@ -154,3 +154,20 @@ $$U(x) = H^{\otimes n} \prod_{\ell=1}^{r} \left[ \prod_{i=1}^{n} R_Z\left(\frac{
 ---
 
 *For additional guidance, see [CLAUDE.md](../CLAUDE.md) in the repository root.*
+
+
+  1. Title: Be the Algorithm: How Large Language Models Really Work — and How Banks Make Them Safe
+
+  2. Outline: Generative AI is everywhere, yet most students treat it as magic. This hands-on workshop pulls back the curtain. Through a live, phone-based
+  game — TheHumanLLM — the whole room becomes a large language model: round by round the audience collectively generates an AI assistant's reply to a real
+  customer query, physically experiencing tokenization, embeddings, attention, and next-token prediction. We then deconstruct it with rigour: why models
+  hallucinate, and the production techniques banks like HSBC use to deploy GenAI safely — RAG, fine-tuning/SLMs, prompt-injection guardrails, and bias
+  mitigation. It closes with an optional take-home Colab notebook to tokenize text, explore embeddings, and inspect a real model's next-token probabilities.
+  No prior ML needed — every concept built from scratch — ideal for foundational BS students while staying technically substantive.
+
+  3. Prerequisites: A smartphone (for the live game). Basic Python helpful for the optional Colab. No ML background required.
+
+  4. Hands-on requiring a laptop: No — in-session activity is phone-based; Colab is optional/take-home.
+
+  5. Preferred date: 12 June 2026 (flexible to 13th)
+  6. Slot: 2–4 pm (≈90 min core, extends to full 2 hrs)
